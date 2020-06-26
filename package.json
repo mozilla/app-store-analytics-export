@@ -1,0 +1,14 @@
+{
+  "name": "app-store-analytics-export",
+  "version": "0.1.0",
+  "description": "Scripts for exporting app analytics to BigQuery",
+  "main": "export/export.js",
+  "repository": "https://github.com/mozilla/app-store-analytics-export.git",
+  "author": "Ben Wu <bewu@mozilla.com>",
+  "license": "MPL-2.0",
+  "dependencies": {
+    "itunesconnectanalytics": "~0.5.0",
+    "request": "^2.88.2",
+    "yargs": "^15.3.1"
+  }
+}
