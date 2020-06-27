@@ -40,6 +40,9 @@ jobs:
       - run:
           name: Test Code
           command: docker run app:build yarn test
+      - run:
+          name: Lint Code
+          command: docker run app:build yarn lint
 
 workflows:
   main:
