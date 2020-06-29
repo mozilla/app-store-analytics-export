@@ -5,11 +5,20 @@ const itc = require('itunesconnectanalytics');
 const url = require('url');
 const util = require('util');
 
+const { BigqueryClient } = require('./bigqueryClient')
+
 class RequestError extends Error {
   constructor(message, errorCode) {
     super(message);
     this.errorCode = errorCode;
   }
+}
+
+function toUnderscore(text) {
+  return text
+    .replace(/([\p{Lowercase_Letter}\d])(\p{Uppercase_Letter})/gu, '$1_$2')
+    .replace(/(\p{Uppercase_Letter}+)(\p{Uppercase_Letter}\p{Lowercase_Letter}+)/gu, '$1_$2')
+    .toLowerCase();
 }
 
 /**
@@ -52,7 +61,7 @@ async function getAllowedDimensionsPerMeasure(client, date) {
   return measuresByDimension;
 }
 
-async function getMetric(client, date, appId, measure, dimension) {
+async function getMetric(client, date, appId, appName, measure, dimension) {
   console.log(`Getting ${measure} by ${dimension}`);
 
   const measures = measure instanceof Array ? measure : [measure];
@@ -75,25 +84,37 @@ async function getMetric(client, date, appId, measure, dimension) {
     },
   );
   const data = await response.json();
-  if (response.ok) {
-    return data;
+  if (response.ok === false) {
+    throw new RequestError(
+      `${response.status} ${response.statusText}
+      \n${JSON.stringify(data.errors, null, 2) || ''}`,
+      response.status,
+    );
   }
-  throw new RequestError(
-    `${response.status} ${response.statusText}
-    \n${JSON.stringify(data.errors, null, 2) || ''}`,
-    response.status,
-  );
+
+  return data.results.map((result) => ({
+    date,
+    app_name: appName,
+    value: result.totals.value,
+    [toUnderscore(dimension)]: result.group.title,
+  })).filter((result) => result.value !== -1);
 }
 
+/**
+ * Pause thread for number of seconds; can be used for exponential backoff in requests
+ */
 async function sleep(seconds) {
   return new Promise(((resolve) => setTimeout(resolve, seconds * 1000)));
 }
 
-async function startExport(client, appId, date) {
+async function startExport(client, project, dataset, overwrite, appId, appName, date) {
   console.log('Starting export');
 
   const measuresByDimension = await getAllowedDimensionsPerMeasure(client, date)
     .catch((err) => { throw new Error(`Failed to get analytics metadata: ${err}`); });
+
+  const bqClient = await BigqueryClient.createClient(project, dataset)
+    .catch((err) => { throw Error(`Failed to create bigquery client: ${err}`); });
 
   // Run in for loop to synchronously send each request to avoid hitting rate limit
   for (const [dimension, measures] of measuresByDimension) {
@@ -103,24 +124,28 @@ async function startExport(client, appId, date) {
       let data = null;
       do {
         const retryDelay = 5 + 2 * 2 ** retryCount;
-        data = await getMetric(client, date, appId, measure, dimension)
-          // eslint-disable-next-line no-loop-func
-          .catch((err) => {
-            console.error(`Failed to get ${measure} grouped by ${dimension}: ${err.message}`);
-            if (err.errorCode === 429) {
-              console.error(`Retrying in ${retryDelay} seconds due to API rate limit`);
-              retry = true;
-            }
-          });
+        try {
+          data = await getMetric(client, date, appId, appName, measure, dimension);
+        } catch (err) {
+          console.error(`Failed to get ${measure} grouped by ${dimension}: ${err.message}`);
+          if (err.errorCode === 429) {
+            console.error(`Retrying in ${retryDelay} seconds due to API rate limit`);
+            retry = true;
+          }
+        }
         await sleep(retryDelay);
         retryCount += 1;
-        if (retryCount >= 5 && retry) {
+        if (retryCount >= 5 && retry === true) {
           console.error(`Failed to get metrics after ${retryCount} attempts`);
           break;
         }
       } while (retry);
-      if (data !== null) {
-        // write to bq
+
+      if (data !== null && data.length > 0) {
+        const tableName = `${toUnderscore(measure)}_by_${toUnderscore(dimension)}`;
+        bqClient.writeRows(tableName, date, data, toUnderscore(dimension), overwrite)
+          .then(() => console.log(`Wrote to table ${tableName}`))
+          .catch((err) => console.error(`Failed to write to table ${tableName}: ${err}`));
       }
     }
   }

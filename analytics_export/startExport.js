@@ -1,17 +1,22 @@
 'use strict';
 
 const itc = require('itunesconnectanalytics');
-const argv = require('yargs')
+
+const { argv } = require('yargs')
   .describe('username', 'App store connect user to authenticate with')
   .describe('password', 'Password for the given app store connect user')
   .describe('app-id', 'ID of the app for which data will exported')
+  .describe('app-name', 'Human-readable name of the app to use in exported data')
   .describe('date', 'Execution date in YYYY-MM-DD')
-  .demandOption(['username', 'password', 'app-id', 'date'])
-  .argv;
+  .describe('project', 'Bigquery project ID')
+  .describe('dataset', 'Bigquery dataset to save data to')
+  .default('dataset', 'apple_app_store')
+  .describe('overwrite', 'Overwrite partition of destination table')
+  .demandOption(['username', 'password', 'app-id', 'app-name', 'date', 'project']);
 
-const analyticsExport = require('./analyticsExport.js');
+const { startExport } = require('./analyticsExport.js');
 
-function authenticateAndExport(username, password) {
+function authenticate(username, password) {
   return new Promise((resolve, reject) => {
     const client = new itc.Itunes(username, password, {
       errorCallback: (err) => {
@@ -25,13 +30,17 @@ function authenticateAndExport(username, password) {
   });
 }
 
-authenticateAndExport(argv.username, argv.password)
+authenticate(argv.username, argv.password)
+  .then((client) => {
+    startExport(
+      client, argv.project, argv.dataset, argv.overwrite,
+      argv.appId, argv.appName, argv.date,
+    ).catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+  })
   .catch((err) => {
     console.error(`Login failed: ${err}`);
-    process.exit(1);
-  })
-  .then((client) => analyticsExport.startExport(client, argv.appId, argv.date))
-  .catch((err) => {
-    console.error(err);
     process.exit(1);
   });
