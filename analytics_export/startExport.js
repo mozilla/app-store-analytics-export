@@ -6,7 +6,8 @@ const argv = require('yargs')
   .describe('password', 'Password for the given app store connect user')
   .describe('app-id', 'ID of the app for which data will exported')
   .describe('date', 'Execution date in YYYY-MM-DD')
-  .demandOption(['username', 'password', 'app-id', 'date']);
+  .demandOption(['username', 'password', 'app-id', 'date'])
+  .argv;
 
 const analyticsExport = require('./analyticsExport.js');
 
