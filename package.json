@@ -7,13 +7,14 @@
   "author": "Ben Wu <bewu@mozilla.com>",
   "license": "MPL-2.0",
   "scripts": {
-    "export": "node --use-strict analytics_export/startExport.js",
+    "export": "node analytics_export/startExport.js",
     "lint": "eslint analytics_export/",
     "lint-fix": "eslint --fix analytics_export/",
     "test": "mocha"
   },
   "dependencies": {
     "itunesconnectanalytics": "JanHalozan/iTunesConnectAnalytics#822494f03764a33a5e064a74078f5fa45a71e53a",
+    "node-fetch": "^2.6.0",
     "request": "^2.88.2",
     "yargs": "^15.3.1"
   },
