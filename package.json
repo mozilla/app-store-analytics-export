@@ -17,6 +17,7 @@
     "itunesconnectanalytics": "JanHalozan/iTunesConnectAnalytics#822494f03764a33a5e064a74078f5fa45a71e53a",
     "node-fetch": "^2.6.0",
     "request": "^2.88.2",
+    "tempy": "^0.5.0",
     "yargs": "^15.3.1"
   },
   "devDependencies": {

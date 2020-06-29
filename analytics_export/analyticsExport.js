@@ -92,12 +92,14 @@ async function getMetric(client, date, appId, appName, measure, dimension) {
     );
   }
 
-  return data.results.map((result) => ({
-    date,
-    app_name: appName,
-    value: result.totals.value,
-    [toUnderscore(dimension)]: result.group.title,
-  })).filter((result) => result.value !== -1);
+  return data.results
+    .filter((result) => result.totals.value !== -1)
+    .map((result) => ({
+      date,
+      app_name: appName,
+      value: result.totals.value,
+      [toUnderscore(dimension)]: result.group.title,
+    }));
 }
 
 /**
@@ -119,31 +121,32 @@ async function startExport(client, project, dataset, overwrite, appId, appName, 
   // Run in for loop to synchronously send each request to avoid hitting rate limit
   for (const [dimension, measures] of measuresByDimension) {
     for (const measure of measures) {
-      let retry = false;
+      let retry;
       let retryCount = 0;
       let data = null;
       do {
-        const retryDelay = 5 + 2 * 2 ** retryCount;
+        retry = false;
+        const retryDelay = 3 + 2 * 2 ** retryCount;
         try {
           data = await getMetric(client, date, appId, appName, measure, dimension);
         } catch (err) {
-          console.error(`Failed to get ${measure} grouped by ${dimension}: ${err.message}`);
+          console.error(`Failed to get ${measure} by ${dimension}: ${err.message}`);
           if (err.errorCode === 429) {
             console.error(`Retrying in ${retryDelay} seconds due to API rate limit`);
             retry = true;
+            retryCount += 1;
           }
         }
         await sleep(retryDelay);
-        retryCount += 1;
-        if (retryCount >= 5 && retry === true) {
-          console.error(`Failed to get metrics after ${retryCount} attempts`);
+        if (retryCount > 5 && retry === true) {
+          console.error(`Failed to get ${measure} by ${dimension} after ${retryCount} attempts`);
           break;
         }
       } while (retry);
 
       if (data !== null && data.length > 0) {
         const tableName = `${toUnderscore(measure)}_by_${toUnderscore(dimension)}`;
-        bqClient.writeRows(tableName, date, data, toUnderscore(dimension), overwrite)
+        bqClient.writeData(tableName, date, data, toUnderscore(dimension), overwrite)
           .then(() => console.log(`Wrote to table ${tableName}`))
           .catch((err) => console.error(`Failed to write to table ${tableName}: ${err}`));
       }
