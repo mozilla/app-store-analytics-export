@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const tempy = require('tempy');
 const { BigQuery } = require('@google-cloud/bigquery');
 
 /**
@@ -47,22 +49,32 @@ class BigqueryClient {
     return table;
   }
 
-  async writeRows(tableName, date, data, dimension) {
+  async writeData(tableName, date, data, dimension, overwrite) {
     const schema = [
       { name: 'date', type: 'DATE', mode: 'REQUIRED' },
       { name: 'app_name', type: 'STRING', mode: 'REQUIRED' },
       { name: 'value', type: 'STRING', mode: 'REQUIRED' },
       { name: dimension, type: 'STRING', mode: 'REQUIRED' },
     ];
-    // TODO: overwrite partition
-    const table = await this.createTableIfNotExists(tableName, schema);
 
-    await table.insert(
-      data,
-      {
-        schema,
+    let table = await this.createTableIfNotExists(tableName, schema);
+
+    const csvData = data.map((entry) => [
+      entry.date, entry.app_name, entry.value, entry[dimension]].join('\t'));
+    const csvPath = tempy.file();
+    fs.writeFileSync(csvPath, csvData.join('\n'));
+
+    table = this.dataset.table(`${tableName}$${date.replace(/-/g, '')}`);
+
+    await table.load(csvPath, {
+      format: 'CSV',
+      createDisposition: 'CREATE_NEVER',
+      writeDisposition: overwrite ? 'WRITE_TRUNCATE' : 'WRITE_APPEND',
+      fieldDelimiter: '\t',
+      schema: {
+        fields: schema,
       },
-    );
+    });
   }
 }
 
