@@ -5,7 +5,6 @@ const tempy = require('tempy');
 const { BigQuery } = require('@google-cloud/bigquery');
 
 const { measureToTablePrefix, dimensionToTableSuffix } = require('./tableMetadata');
-const { toUnderscore } = require('./textUtils');
 
 /**
  *  Wrapper around base bigquery client that handles all interaction logic
@@ -57,17 +56,30 @@ class BigqueryClient {
       { name: 'date', type: 'DATE', mode: 'REQUIRED' },
       { name: 'app_name', type: 'STRING', mode: 'REQUIRED' },
       { name: 'value', type: 'STRING', mode: 'REQUIRED' },
-      { name: toUnderscore(dimension), type: 'STRING', mode: 'REQUIRED' },
     ];
 
-    const tableName = `${measureToTablePrefix[measure].name}_by_${dimensionToTableSuffix[dimension]}`;
+    if (dimension !== null) {
+      schema.push({ name: dimensionToTableSuffix[dimension], type: 'STRING', mode: 'REQUIRED' });
+    }
+
+    let tableName;
+    if (dimension !== null) {
+      tableName = `${measureToTablePrefix[measure].name}_by_${dimensionToTableSuffix[dimension]}`;
+    } else {
+      tableName = `${measureToTablePrefix[measure].name}_total`;
+    }
 
     await this.createTableIfNotExists(
       tableName, schema, measureToTablePrefix[measure].description,
     );
 
-    const csvData = data.map((entry) => [
-      entry.date, entry.app_name, entry.value, entry[dimension]].join('\t'));
+    const csvData = data.map((entry) => {
+      const rowData = [entry.date, entry.app_name, entry.value];
+      if (dimension !== null) {
+        rowData.push(entry[dimension]);
+      }
+      return rowData.join('\t');
+    });
     const csvPath = tempy.file();
     fs.writeFileSync(csvPath, csvData.join('\n'));
 

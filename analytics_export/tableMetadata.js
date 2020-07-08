@@ -64,6 +64,7 @@ const dimensionToTableSuffix = {
   region: 'region',
   source: 'source',
   storefront: 'storefront',
+  [null]: '',
 };
 
 exports.measureToTablePrefix = metricToTablePrefix;
