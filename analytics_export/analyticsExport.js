@@ -42,6 +42,9 @@ async function getAllowedDimensionsPerMeasure(client, date) {
     }
   });
 
+  // Set null dimension to get ungrouped totals
+  measuresByDimension.set(null, []);
+
   // Create mapping of dimensions to allowed measures
   settings.measures.forEach((measure) => {
     measure.dimensions.forEach((dimensionId) => {
@@ -50,6 +53,7 @@ async function getAllowedDimensionsPerMeasure(client, date) {
           .push(measure.key);
       }
     });
+    measuresByDimension.get(null).push(measure.key);
   });
 
   return measuresByDimension;
@@ -58,15 +62,17 @@ async function getAllowedDimensionsPerMeasure(client, date) {
 async function getMetric(client, date, appId, appName, measure, dimension) {
   console.log(`Getting ${measure} by ${dimension}`);
 
-  const measures = measure instanceof Array ? measure : [measure];
+  const dimensionGiven = dimension !== undefined && dimension !== null;
 
-  const query = itc.AnalyticsQuery.metrics(appId, {
+  const measures = measure instanceof Array ? measure : [measure];
+  const queryConfig = {
     measures,
-    group: {
-      dimension,
-    },
     frequency: itc.frequency.days,
-  }).date(date, date);
+  };
+  if (dimensionGiven) {
+    queryConfig.group = { dimension };
+  }
+  const query = itc.AnalyticsQuery.metrics(appId, queryConfig).date(date, date);
 
   // Directly fetch instead of itc.request to avoid queue and properly handle errors
   const response = await fetch(
@@ -88,12 +94,17 @@ async function getMetric(client, date, appId, appName, measure, dimension) {
 
   return data.results
     .filter((result) => result.totals.value !== -1)
-    .map((result) => ({
-      date,
-      app_name: appName,
-      value: result.totals.value,
-      [dimension]: result.group.title,
-    }));
+    .map((result) => {
+      const value = {
+        date,
+        app_name: appName,
+        value: result.totals.value,
+      };
+      if (dimensionGiven) {
+        value[dimension] = result.group.title;
+      }
+      return value;
+    });
 }
 
 /**
@@ -148,7 +159,7 @@ async function startExport(client, project, dataset, overwrite, appId, appName, 
         bqClient.writeData(measure, dimension, date, data, overwrite)
           .then((tableName) => console.log(`Wrote to table ${tableName}`))
           .catch((err) => {
-            console.error(`Failed to write to table ${measures} by ${dimension}: ${err}`);
+            console.error(`Failed to write to table ${measure} by ${dimension}: ${err}`);
           });
       }
     }
