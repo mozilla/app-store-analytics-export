@@ -5,20 +5,14 @@ const itc = require('itunesconnectanalytics');
 const url = require('url');
 const util = require('util');
 
-const { BigqueryClient } = require('./bigqueryClient')
+const { BigqueryClient } = require('./bigqueryClient');
+const { measureToTablePrefix, dimensionToTableSuffix } = require('./tableMetadata');
 
 class RequestError extends Error {
   constructor(message, errorCode) {
     super(message);
     this.errorCode = errorCode;
   }
-}
-
-function toUnderscore(text) {
-  return text
-    .replace(/([\p{Lowercase_Letter}\d])(\p{Uppercase_Letter})/gu, '$1_$2')
-    .replace(/(\p{Uppercase_Letter}+)(\p{Uppercase_Letter}\p{Lowercase_Letter}+)/gu, '$1_$2')
-    .toLowerCase();
 }
 
 /**
@@ -98,7 +92,7 @@ async function getMetric(client, date, appId, appName, measure, dimension) {
       date,
       app_name: appName,
       value: result.totals.value,
-      [toUnderscore(dimension)]: result.group.title,
+      [dimension]: result.group.title,
     }));
 }
 
@@ -120,7 +114,13 @@ async function startExport(client, project, dataset, overwrite, appId, appName, 
 
   // Run in for loop to synchronously send each request to avoid hitting rate limit
   for (const [dimension, measures] of measuresByDimension) {
+    if (!(dimension in dimensionToTableSuffix)) {
+      continue;
+    }
     for (const measure of measures) {
+      if (!(measure in measureToTablePrefix)) {
+        continue;
+      }
       let retry;
       let retryCount = 0;
       let data = null;
@@ -145,10 +145,11 @@ async function startExport(client, project, dataset, overwrite, appId, appName, 
       } while (retry);
 
       if (data !== null && data.length > 0) {
-        const tableName = `${toUnderscore(measure)}_by_${toUnderscore(dimension)}`;
-        bqClient.writeData(tableName, date, data, toUnderscore(dimension), overwrite)
-          .then(() => console.log(`Wrote to table ${tableName}`))
-          .catch((err) => console.error(`Failed to write to table ${tableName}: ${err}`));
+        bqClient.writeData(measure, dimension, date, data, overwrite)
+          .then((tableName) => console.log(`Wrote to table ${tableName}`))
+          .catch((err) => {
+            console.error(`Failed to write to table ${measures} by ${dimension}: ${err}`);
+          });
       }
     }
   }

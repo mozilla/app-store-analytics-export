@@ -4,12 +4,14 @@ const fs = require('fs');
 const tempy = require('tempy');
 const { BigQuery } = require('@google-cloud/bigquery');
 
+const { measureToTablePrefix, dimensionToTableSuffix } = require('./tableMetadata');
+const { toUnderscore } = require('./textUtils');
+
 /**
  *  Wrapper around base bigquery client that handles all interaction logic
  */
 class BigqueryClient {
-  constructor(bqClient, dataset) {
-    this.client = bqClient;
+  constructor(dataset) {
     this.dataset = dataset;
   }
 
@@ -26,10 +28,10 @@ class BigqueryClient {
       console.log(`Created dataset: ${datasetId}`);
     }
 
-    return new BigqueryClient(bqClient, dataset);
+    return new BigqueryClient(dataset);
   }
 
-  async createTableIfNotExists(tableName, schema) {
+  async createTableIfNotExists(tableName, schema, description) {
     let table = this.dataset.table(tableName);
     const [tableExists] = await table.exists();
 
@@ -39,6 +41,7 @@ class BigqueryClient {
 
     const options = {
       schema,
+      description,
       timePartitioning: {
         type: 'DAY',
         field: 'date',
@@ -49,22 +52,27 @@ class BigqueryClient {
     return table;
   }
 
-  async writeData(tableName, date, data, dimension, overwrite) {
+  async writeData(measure, dimension, date, data, overwrite) {
     const schema = [
       { name: 'date', type: 'DATE', mode: 'REQUIRED' },
       { name: 'app_name', type: 'STRING', mode: 'REQUIRED' },
       { name: 'value', type: 'STRING', mode: 'REQUIRED' },
-      { name: dimension, type: 'STRING', mode: 'REQUIRED' },
+      { name: toUnderscore(dimension), type: 'STRING', mode: 'REQUIRED' },
     ];
 
-    let table = await this.createTableIfNotExists(tableName, schema);
+    const tableName = `${measureToTablePrefix[measure].name}_by_${dimensionToTableSuffix[dimension]}`;
+
+    await this.createTableIfNotExists(
+      tableName, schema, measureToTablePrefix[measure].description,
+    );
 
     const csvData = data.map((entry) => [
       entry.date, entry.app_name, entry.value, entry[dimension]].join('\t'));
     const csvPath = tempy.file();
     fs.writeFileSync(csvPath, csvData.join('\n'));
 
-    table = this.dataset.table(`${tableName}$${date.replace(/-/g, '')}`);
+    // Write to correct date partition
+    const table = this.dataset.table(`${tableName}$${date.replace(/-/g, '')}`);
 
     await table.load(csvPath, {
       format: 'CSV',
@@ -75,6 +83,8 @@ class BigqueryClient {
         fields: schema,
       },
     });
+
+    return tableName;
   }
 }
 
