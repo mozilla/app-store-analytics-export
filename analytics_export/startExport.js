@@ -14,7 +14,7 @@ const { argv } = require('yargs')
   .describe('overwrite', 'Overwrite partition of destination table')
   .demandOption(['username', 'password', 'app-id', 'app-name', 'date', 'project']);
 
-const { startExport } = require('./analyticsExport.js');
+const { AnalyticExport } = require('./analyticsExport.js');
 
 function authenticate(username, password) {
   return new Promise((resolve, reject) => {
@@ -32,10 +32,12 @@ function authenticate(username, password) {
 
 authenticate(argv.username, argv.password)
   .then((client) => {
-    startExport(
-      client, argv.project, argv.dataset, argv.overwrite,
-      argv.appId, argv.appName, argv.date,
-    ).catch((err) => {
+    const analyticsExport = new AnalyticExport(
+      client, argv.project, argv.dataset,
+      argv.appId, argv.appName,
+    );
+
+    analyticsExport.startExport(argv.date, argv.overwrite).catch((err) => {
       console.error(err);
       process.exit(1);
     });
