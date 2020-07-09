@@ -22,16 +22,15 @@ class AnalyticsExport {
    * Return a Map where key is a dimension key and value is an array of measure keys
    * that can be grouped by the dimension
    */
-  async getAllowedDimensionsPerMeasure(date) {
+  async getAllowedDimensionsPerMeasure(startTimestamp, endTimestamp) {
     const getSettings = util.promisify(this.client.getSettings).bind(this.client);
     const settings = await getSettings();
 
-    const executionDate = Date.parse(date);
     const dataEndDate = settings.configuration.dataEndDate.slice(0, 10);
     const dataStartDate = settings.configuration.dataStartDate.slice(0, 10);
 
-    if (executionDate > Date.parse(dataEndDate) || executionDate < Date.parse(dataStartDate)) {
-      throw Error(`No data found for ${date}; data exists for ${dataStartDate} to ${dataEndDate}`);
+    if (endTimestamp > Date.parse(dataEndDate) || startTimestamp < Date.parse(dataStartDate)) {
+      throw Error(`Date out of range; data exists for ${dataStartDate} to ${dataEndDate}`);
     }
 
     const measuresByDimension = new Map();
@@ -62,7 +61,7 @@ class AnalyticsExport {
     return measuresByDimension;
   }
 
-  async getMetric(date, measure, dimension) {
+  async getMetric(startDate, endDate, measure, dimension) {
     console.log(`Getting ${measure} by ${dimension}`);
 
     const dimensionGiven = dimension !== undefined && dimension !== null;
@@ -75,7 +74,7 @@ class AnalyticsExport {
     if (dimensionGiven) {
       queryConfig.group = { dimension };
     }
-    const query = itc.AnalyticsQuery.metrics(this.appId, queryConfig).date(date, date);
+    const query = itc.AnalyticsQuery.metrics(this.appId, queryConfig).date(startDate, endDate);
 
     // Directly fetch instead of itc.request to avoid queue and properly handle errors
     const response = await fetch(
@@ -95,19 +94,30 @@ class AnalyticsExport {
       );
     }
 
-    return data.results
+    const resultsByDate = new Map();
+
+    data.results
       .filter((result) => result.totals.value !== -1)
-      .map((result) => {
-        const value = {
-          date,
-          app_name: this.appName,
-          value: result.totals.value,
-        };
-        if (dimensionGiven) {
-          value[dimension] = result.group.title;
+      .flatMap((result) => (
+        result.data.map((dayData) => {
+          const value = {
+            date: dayData.date.slice(0, 10),
+            app_name: this.appName,
+            value: dayData[measure],
+          };
+          if (dimensionGiven) {
+            value[dimension] = result.group.title;
+          }
+          return value;
+        })
+      )).forEach((value) => {
+        if (!resultsByDate.has(value.date)) {
+          resultsByDate.set(value.date, []);
         }
-        return value;
+        resultsByDate.get(value.date).push(value);
       });
+
+    return resultsByDate;
   }
 
   /**
@@ -117,11 +127,20 @@ class AnalyticsExport {
     return new Promise(((resolve) => setTimeout(resolve, seconds * 1000)));
   }
 
-  async startExport(date, overwrite) {
+  async startExport(startDate, endDate, overwrite) {
+    const parsedStartDate = Date.parse(startDate);
+    const parsedEndDate = Date.parse(endDate);
+    if (Number.isNaN(parsedStartDate) || Number.isNaN(parsedEndDate)) {
+      throw Error('Execution dates must be given in the format YYYY-MM-DD');
+    } else if (parsedStartDate > parsedEndDate) {
+      throw Error('Start date must be before end date');
+    }
+
     console.log('Starting export');
 
-    const measuresByDimension = await this.getAllowedDimensionsPerMeasure(date)
-      .catch((err) => { throw new Error(`Failed to get analytics metadata: ${err}`); });
+    const measuresByDimension = await this.getAllowedDimensionsPerMeasure(
+      parsedStartDate, parsedEndDate,
+    ).catch((err) => { throw new Error(`Failed to get analytics metadata: ${err}`); });
 
     const bqClient = await BigqueryClient.createClient(this.project, this.dataset)
       .catch((err) => { throw Error(`Failed to create bigquery client: ${err}`); });
@@ -137,12 +156,12 @@ class AnalyticsExport {
         }
         let retry;
         let retryCount = 0;
-        let data = null;
+        let dataByDate = null;
         do {
           retry = false;
           const retryDelay = 3 + 2 * 2 ** retryCount;
           try {
-            data = await this.getMetric(date, measure, dimension);
+            dataByDate = await this.getMetric(startDate, endDate, measure, dimension);
           } catch (err) {
             console.error(`Failed to get ${measure} by ${dimension}: ${err.message}`);
             if (err.errorCode === 429) {
@@ -158,12 +177,17 @@ class AnalyticsExport {
           }
         } while (retry);
 
-        if (data !== null && data.length > 0) {
-          bqClient.writeData(measure, dimension, date, data, overwrite)
-            .then((tableName) => console.log(`Wrote to table ${tableName}`))
-            .catch((err) => {
-              console.error(`Failed to write to table ${measure} by ${dimension}: ${err}`);
-            });
+        if (dataByDate !== null) {
+          for (const [date, data] of dataByDate) {
+            if (data.length === 0) {
+              continue;
+            }
+            bqClient.writeData(measure, dimension, date, data, overwrite)
+              .then((tableName) => console.log(`Wrote to table ${tableName} for ${date}`))
+              .catch((err) => {
+                console.error(`Failed to write to table ${measure} by ${dimension} for ${date}: ${err}`);
+              });
+          }
         }
       }
     }

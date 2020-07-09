@@ -7,12 +7,13 @@ const { argv } = require('yargs')
   .describe('password', 'Password for the given app store connect user')
   .describe('app-id', 'ID of the app for which data will exported')
   .describe('app-name', 'Human-readable name of the app to use in exported data')
-  .describe('date', 'Execution date in YYYY-MM-DD')
+  .describe('start-date', 'First date to pull data for as YYYY-MM-DD')
+  .describe('end-date', 'Last date to pull data for as YYYY-MM-DD (defaults to start-date if not given)')
   .describe('project', 'Bigquery project ID')
   .describe('dataset', 'Bigquery dataset to save data to')
   .default('dataset', 'apple_app_store')
   .describe('overwrite', 'Overwrite partition of destination table')
-  .demandOption(['username', 'password', 'app-id', 'app-name', 'date', 'project']);
+  .demandOption(['username', 'password', 'app-id', 'app-name', 'start-date', 'project']);
 
 const { AnalyticExport } = require('./analyticsExport.js');
 
@@ -32,12 +33,14 @@ function authenticate(username, password) {
 
 authenticate(argv.username, argv.password)
   .then((client) => {
+    const endDate = argv.endDate || argv.startDate;
+
     const analyticsExport = new AnalyticExport(
       client, argv.project, argv.dataset,
       argv.appId, argv.appName,
     );
 
-    analyticsExport.startExport(argv.date, argv.overwrite).catch((err) => {
+    analyticsExport.startExport(argv.startDate, endDate, argv.overwrite).catch((err) => {
       console.error(err);
       process.exit(1);
     });
