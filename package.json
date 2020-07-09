@@ -10,6 +10,7 @@
     "export": "node analytics_export/startExport.js",
     "lint": "eslint analytics_export/",
     "lint-fix": "eslint --fix analytics_export/",
+    "pretty": "prettier --write analytics_export",
     "test": "mocha"
   },
   "dependencies": {
@@ -24,7 +25,9 @@
     "chai": "^4.2.0",
     "eslint": "^7.3.1",
     "eslint-config-airbnb-base": "^14.2.0",
+    "eslint-config-prettier": "^6.11.0",
     "eslint-plugin-import": "^2.21.2",
-    "mocha": "^8.0.1"
+    "mocha": "^8.0.1",
+    "prettier": "^2.0.5"
   }
 }
