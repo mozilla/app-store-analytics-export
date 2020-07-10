@@ -1,13 +1,10 @@
 "use strict";
 
+import { describe, it } from "mocha";
+
 const analyticsExport = require("../analytics_export/analyticsExport.js");
 
-const chai = require("chai");
-
-chai.should();
-
-describe("Export Functions", function () {
-    it("should pass test", function () {
-        analyticsExport.startExport().should.equal("test");
-    });
+describe("getAllowedDimensionsPerMeasure", () => {
+  it("should fail if given date before data start date", () => {
+  });
 });
