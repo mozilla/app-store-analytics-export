@@ -62,8 +62,10 @@ class BigqueryClient {
   }
 
   static getTableName(measure, dimension) {
+    const optin = measureToTablePrefix[measure].optin ? "opt_in_" : "";
+
     return dimension
-      ? `${measureToTablePrefix[measure].name}_by_${dimensionToTableSuffix[dimension]}`
+      ? `${measureToTablePrefix[measure].name}_by_${optin}${dimensionToTableSuffix[dimension]}`
       : `${measureToTablePrefix[measure].name}_total`;
   }
 
@@ -71,7 +73,7 @@ class BigqueryClient {
     const schema = [
       { name: "date", type: "DATE", mode: "REQUIRED" },
       { name: "app_name", type: "STRING", mode: "REQUIRED" },
-      { name: "value", type: "INT64", mode: "REQUIRED" },
+      { name: measureToTablePrefix[measure].name, type: "INT64", mode: "REQUIRED" },
     ];
 
     if (dimension) {
@@ -90,7 +92,7 @@ class BigqueryClient {
     const tableName = BigqueryClient.getTableName(measure, dimension);
 
     const csvData = data.map((entry) => {
-      const rowData = [entry.date, entry.app_name, entry.value];
+      const rowData = [entry.date, entry.app_name, entry[measureToTablePrefix[measure].name]];
       if (dimension !== null) {
         rowData.push(entry[dimension]);
       }

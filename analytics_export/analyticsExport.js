@@ -114,7 +114,7 @@ class AnalyticsExport {
           const value = {
             date: dayData.date.slice(0, 10),
             app_name: this.appName,
-            value: dayData[measure],
+            [measureToTablePrefix[measure].name]: dayData[measure],
           };
           if (dimensionGiven) {
             value[dimension] = result.group.title;
