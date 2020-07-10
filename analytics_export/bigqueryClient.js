@@ -73,7 +73,7 @@ class BigqueryClient {
     const schema = [
       { name: "date", type: "DATE", mode: "REQUIRED" },
       { name: "app_name", type: "STRING", mode: "REQUIRED" },
-      { name: measureToTablePrefix[measure].name, type: "INT64", mode: "REQUIRED" },
+      { name: measureToTablePrefix[measure].name, type: "FLOAT64", mode: "REQUIRED" },
     ];
 
     if (dimension) {
