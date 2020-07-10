@@ -66,7 +66,10 @@ describe("BigqueryClient", () => {
       };
       const bigqueryClient = new BigqueryClient(mockDataset);
 
-      await bigqueryClient.createTableIfNotExists("impressionsTotal", "appVersion");
+      await bigqueryClient.createTableIfNotExists(
+        "impressionsTotal",
+        "appVersion",
+      );
 
       assert.isTrue(mockTable.exists.calledOnce);
       assert.isTrue(mockDataset.table.calledOnce);
@@ -85,7 +88,10 @@ describe("BigqueryClient", () => {
 
       const bigqueryClient = new BigqueryClient(mockDataset);
 
-      await bigqueryClient.createTableIfNotExists("impressionsTotal", "appVersion");
+      await bigqueryClient.createTableIfNotExists(
+        "impressionsTotal",
+        "appVersion",
+      );
 
       assert.isTrue(mockTable.exists.calledOnce);
       assert.isTrue(mockDataset.table.calledOnce);
@@ -152,8 +158,18 @@ describe("BigqueryClient", () => {
       const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
 
       const data = [
-        { date: "2020-07-07", app_name: "Firefox", impressions: 1, region: "a" },
-        { date: "2020-07-07", app_name: "Firefox", impressions: 2, region: "a" },
+        {
+          date: "2020-07-07",
+          app_name: "Firefox",
+          impressions: 1,
+          region: "a",
+        },
+        {
+          date: "2020-07-07",
+          app_name: "Firefox",
+          impressions: 2,
+          region: "a",
+        },
       ];
 
       await bqClient.writeData(

@@ -6,10 +6,7 @@ const url = require("url");
 const util = require("util");
 
 const { BigqueryClient } = require("./bigqueryClient");
-const {
-  measureToTablePrefix,
-  dimensionToTableSuffix,
-} = require("./tableMetadata");
+const { metricData, dimensionToTableSuffix } = require("./tableMetadata");
 const { RequestError } = require("./requestError");
 
 class AnalyticsExport {
@@ -114,7 +111,7 @@ class AnalyticsExport {
           const value = {
             date: dayData.date.slice(0, 10),
             app_name: this.appName,
-            [measureToTablePrefix[measure].name]: dayData[measure],
+            [metricData[measure].name]: dayData[measure],
           };
           if (dimensionGiven) {
             value[dimension] = result.group.title;
@@ -156,7 +153,8 @@ class AnalyticsExport {
             console.error(
               `Failed to write to table ${measure} by ${dimension} for ${date}: ${err}`,
             );
-          })
+            throw err;
+          }),
       );
     }
     await Promise.all(writePromises);
@@ -184,7 +182,7 @@ class AnalyticsExport {
       this.project,
       this.dataset,
     ).catch((err) => {
-      throw Error(`Failed to create bigquery client: ${err}`);
+      throw new Error(`Failed to create bigquery client: ${err}`);
     });
 
     // Run in for loop to synchronously send each request to avoid hitting rate limit
@@ -193,7 +191,7 @@ class AnalyticsExport {
         continue;
       }
       for (const measure of measures) {
-        if (!(measure in measureToTablePrefix)) {
+        if (!(measure in metricData)) {
           continue;
         }
         let retry;
@@ -219,20 +217,29 @@ class AnalyticsExport {
               );
               retry = true;
               retryCount += 1;
+            } else {
+              throw err;
             }
           }
           await AnalyticsExport.sleep(retryDelay);
-          if (retryCount > 5 && retry === true) {
-            console.error(
+          if (retryCount >= 5 && retry === true) {
+            throw new Error(
               `Failed to get ${measure} by ${dimension} after ${retryCount} attempts`,
             );
-            break;
           }
         } while (retry);
 
         if (dataByDate !== null) {
-          await AnalyticsExport.writeData(bqClient, measure, dimension, dataByDate, overwrite)
-            .then(() => console.log(`Finished writing to table for ${measure} by ${dimension}`));
+          await AnalyticsExport.writeData(
+            bqClient,
+            measure,
+            dimension,
+            dataByDate,
+            overwrite,
+          );
+          console.log(
+            `Finished writing to table for ${measure} by ${dimension}`,
+          );
         }
       }
     }

@@ -1,10 +1,12 @@
 "use strict";
 
+const proxyquire = require("proxyquire");
 const { assert } = require("chai");
 const { beforeEach, describe, it } = require("mocha");
 const { spy, stub } = require("sinon");
 
-const { AnalyticsExport } = require("../analytics_export/analyticsExport.js");
+const { AnalyticsExport } = require("../analytics_export/analyticsExport");
+const { RequestError } = require("../analytics_export/requestError");
 
 describe("Analytics export", () => {
   describe("getAllowedDimensionsPerMeasure", () => {
@@ -115,20 +117,98 @@ describe("Analytics export", () => {
         Date.parse("2020-02-01"),
       );
 
-      assert.equal(measuresByDimension.get("appVersion").length, 2);
+      assert.lengthOf(measuresByDimension.get("appVersion"), 2);
       assert.include(measuresByDimension.get("appVersion"), "impressionsTotal");
       assert.include(measuresByDimension.get("appVersion"), "pageViewCount");
 
-      assert.equal(measuresByDimension.get("platform").length, 2);
+      assert.lengthOf(measuresByDimension.get("platform"), 2);
       assert.include(measuresByDimension.get("platform"), "impressionsTotal");
-      assert.include(measuresByDimension.get("platform"), "impressionsTotalUnique");
+      assert.include(
+        measuresByDimension.get("platform"),
+        "impressionsTotalUnique",
+      );
 
-      assert.strictEqual(measuresByDimension.get("platformVersion").length, 0);
+      assert.lengthOf(measuresByDimension.get("platformVersion"), 0);
 
-      assert.equal(measuresByDimension.get(null).length, 3);
+      assert.lengthOf(measuresByDimension.get(null), 3);
       assert.include(measuresByDimension.get(null), "impressionsTotal");
       assert.include(measuresByDimension.get(null), "impressionsTotalUnique");
       assert.include(measuresByDimension.get(null), "pageViewCount");
+    });
+  });
+
+  describe("metric fetching", () => {
+    let analyticsExportProxy;
+    let analyticsExport;
+
+    beforeEach(() => {
+      analyticsExportProxy = proxyquire(
+        "../analytics_export/analyticsExport.js",
+        {
+          "./bigqueryClient": {
+            BigqueryClient: {
+              createClient: stub().resolves({}),
+            },
+          },
+        },
+      );
+
+      analyticsExportProxy.AnalyticsExport.writeData = stub();
+      analyticsExportProxy.AnalyticsExport.sleep = stub().resolves();
+
+      analyticsExport = new analyticsExportProxy.AnalyticsExport(
+        null,
+        "project",
+        "dataset",
+        "appId",
+        "appName",
+      );
+    });
+
+    it("should retry query fetch on api rate limit errors", async () => {
+      analyticsExport.getAllowedDimensionsPerMeasure = stub().resolves([
+        ["appVersion", ["impressionsTotal"]],
+      ]);
+      analyticsExport.getMetric = stub().throws(new RequestError("", 429));
+
+      await analyticsExport.startExport("2020-01-01", "2020-01-01", true)
+        .catch(() => {});
+
+      assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.notCalled);
+      assert.equal(analyticsExport.getMetric.callCount, 5);
+      analyticsExportProxy.AnalyticsExport.sleep.args
+        .map((arg) => arg[0])
+        .reduce((prev, cur) => {
+          assert.isTrue(cur > prev);
+          return cur;
+        });
+    });
+
+    it("should not retry errors that are not due to api limit", async () => {
+      analyticsExport.getAllowedDimensionsPerMeasure = stub().resolves([
+        ["appVersion", ["impressionsTotal", "pageViewCount"]],
+        ["platformVersion", ["impressionsTotal"]],
+      ]);
+      analyticsExport.getMetric = stub().throws(new RequestError("", 403));
+
+      await analyticsExport.startExport("2020-01-01", "2020-01-01", true)
+        .catch(() => {});
+
+      assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.notCalled);
+      assert.equal(analyticsExport.getMetric.callCount, 1);
+    });
+
+    it("should not fetch metrics and dimension that are not recognized in table metadata", async () => {
+      analyticsExport.getAllowedDimensionsPerMeasure = stub().resolves([
+        ["appVersion", ["impressionsTotal", "abcdef"]],
+        ["defghi", ["impressionsTotal"]],
+      ]);
+      analyticsExport.getMetric = stub().resolves({});
+
+      await analyticsExport.startExport("2020-01-01", "2020-01-01", true);
+
+      assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.calledOnce);
+      assert.equal(analyticsExport.getMetric.callCount, 1);
     });
   });
 });
