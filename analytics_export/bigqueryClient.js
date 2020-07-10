@@ -3,6 +3,7 @@
 const fs = require("fs");
 const tempy = require("tempy");
 const { BigQuery } = require("@google-cloud/bigquery");
+const { Semaphore } = require("await-semaphore");
 
 const {
   measureToTablePrefix,
@@ -15,6 +16,8 @@ const {
 class BigqueryClient {
   constructor(dataset) {
     this.dataset = dataset;
+    // bigquery has a 100 concurrent request limit per method per user
+    this.loadSemaphore = new Semaphore(50);
   }
 
   static async createClient(projectId, datasetId) {
@@ -33,7 +36,11 @@ class BigqueryClient {
     return new BigqueryClient(dataset);
   }
 
-  async createTableIfNotExists(tableName, schema, description) {
+  async createTableIfNotExists(measure, dimension) {
+    const tableName = BigqueryClient.getTableName(measure, dimension);
+    const schema = BigqueryClient.getSchema(measure, dimension);
+    const { description } = measureToTablePrefix[measure];
+
     let table = this.dataset.table(tableName);
     const [tableExists] = await table.exists();
 
@@ -54,11 +61,17 @@ class BigqueryClient {
     return table;
   }
 
-  async writeData(measure, dimension, date, data, overwrite) {
+  static getTableName(measure, dimension) {
+    return dimension
+      ? `${measureToTablePrefix[measure].name}_by_${dimensionToTableSuffix[dimension]}`
+      : `${measureToTablePrefix[measure].name}_total`;
+  }
+
+  static getSchema(measure, dimension) {
     const schema = [
       { name: "date", type: "DATE", mode: "REQUIRED" },
       { name: "app_name", type: "STRING", mode: "REQUIRED" },
-      { name: "value", type: "STRING", mode: "REQUIRED" },
+      { name: "value", type: "INT64", mode: "REQUIRED" },
     ];
 
     if (dimension) {
@@ -69,15 +82,12 @@ class BigqueryClient {
       });
     }
 
-    const tableName = dimension
-      ? `${measureToTablePrefix[measure].name}_by_${dimensionToTableSuffix[dimension]}`
-      : `${measureToTablePrefix[measure].name}_total`;
+    return schema;
+  }
 
-    await this.createTableIfNotExists(
-      tableName,
-      schema,
-      measureToTablePrefix[measure].description,
-    );
+  async writeData(measure, dimension, date, data, overwrite) {
+    const schema = BigqueryClient.getSchema(measure, dimension);
+    const tableName = BigqueryClient.getTableName(measure, dimension);
 
     const csvData = data.map((entry) => {
       const rowData = [entry.date, entry.app_name, entry.value];
@@ -92,14 +102,16 @@ class BigqueryClient {
     // Write to correct date partition
     const table = this.dataset.table(`${tableName}$${date.replace(/-/g, "")}`);
 
-    await table.load(csvPath, {
-      format: "CSV",
-      createDisposition: "CREATE_NEVER",
-      writeDisposition: overwrite ? "WRITE_TRUNCATE" : "WRITE_APPEND",
-      fieldDelimiter: "\t",
-      schema: {
-        fields: schema,
-      },
+    await this.loadSemaphore.use(async () => {
+      await table.load(csvPath, {
+        format: "CSV",
+        createDisposition: "CREATE_NEVER",
+        writeDisposition: overwrite ? "WRITE_TRUNCATE" : "WRITE_APPEND",
+        fieldDelimiter: "\t",
+        schema: {
+          fields: schema,
+        },
+      });
     });
 
     return tableName;

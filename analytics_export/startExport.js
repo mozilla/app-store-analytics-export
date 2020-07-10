@@ -28,7 +28,7 @@ const { argv } = require("yargs")
     "project",
   ]);
 
-const { AnalyticExport } = require("./analyticsExport.js");
+const { AnalyticsExport } = require("./analyticsExport.js");
 
 function authenticate(username, password) {
   return new Promise((resolve, reject) => {
@@ -48,7 +48,7 @@ authenticate(argv.username, argv.password)
   .then((client) => {
     const endDate = argv.endDate || argv.startDate;
 
-    const analyticsExport = new AnalyticExport(
+    const analyticsExport = new AnalyticsExport(
       client,
       argv.project,
       argv.dataset,
