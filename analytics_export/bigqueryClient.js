@@ -5,10 +5,7 @@ const tempy = require("tempy");
 const { BigQuery } = require("@google-cloud/bigquery");
 const { Semaphore } = require("await-semaphore");
 
-const {
-  measureToTablePrefix,
-  dimensionToTableSuffix,
-} = require("./tableMetadata");
+const { metricData, dimensionToTableSuffix } = require("./tableMetadata");
 
 /**
  *  Wrapper around base bigquery client that handles all interaction logic
@@ -39,7 +36,7 @@ class BigqueryClient {
   async createTableIfNotExists(measure, dimension) {
     const tableName = BigqueryClient.getTableName(measure, dimension);
     const schema = BigqueryClient.getSchema(measure, dimension);
-    const { description } = measureToTablePrefix[measure];
+    const { description } = metricData[measure];
 
     let table = this.dataset.table(tableName);
     const [tableExists] = await table.exists();
@@ -62,18 +59,22 @@ class BigqueryClient {
   }
 
   static getTableName(measure, dimension) {
-    const optin = measureToTablePrefix[measure].optin ? "opt_in_" : "";
+    const optin = metricData[measure].optin ? "opt_in_" : "";
 
     return dimension
-      ? `${measureToTablePrefix[measure].name}_by_${optin}${dimensionToTableSuffix[dimension]}`
-      : `${measureToTablePrefix[measure].name}_total`;
+      ? `${metricData[measure].name}_by_${optin}${dimensionToTableSuffix[dimension]}`
+      : `${metricData[measure].name}_total`;
   }
 
   static getSchema(measure, dimension) {
     const schema = [
       { name: "date", type: "DATE", mode: "REQUIRED" },
       { name: "app_name", type: "STRING", mode: "REQUIRED" },
-      { name: measureToTablePrefix[measure].name, type: "FLOAT64", mode: "REQUIRED" },
+      {
+        name: metricData[measure].name,
+        type: metricData[measure].type,
+        mode: "REQUIRED",
+      },
     ];
 
     if (dimension) {
@@ -92,7 +93,11 @@ class BigqueryClient {
     const tableName = BigqueryClient.getTableName(measure, dimension);
 
     const csvData = data.map((entry) => {
-      const rowData = [entry.date, entry.app_name, entry[measureToTablePrefix[measure].name]];
+      const rowData = [
+        entry.date,
+        entry.app_name,
+        entry[metricData[measure].name],
+      ];
       if (dimension !== null) {
         rowData.push(entry[dimension]);
       }
