@@ -4,7 +4,6 @@ const fetch = require("node-fetch");
 const itc = require("itunesconnectanalytics");
 const url = require("url");
 const util = require("util");
-const _ = require("lodash");
 
 const { BigqueryClient } = require("./bigqueryClient");
 const {
@@ -140,6 +139,29 @@ class AnalyticsExport {
     return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
   }
 
+  static async writeData(bqClient, measure, dimension, dataByDate, overwrite) {
+    await bqClient.createTableIfNotExists(measure, dimension);
+
+    const writePromises = [];
+
+    for (const [date, data] of dataByDate) {
+      if (data.length === 0) {
+        continue;
+      }
+
+      writePromises.push(
+        bqClient
+          .writeData(measure, dimension, date, data, overwrite)
+          .catch((err) => {
+            console.error(
+              `Failed to write to table ${measure} by ${dimension} for ${date}: ${err}`,
+            );
+          })
+      );
+    }
+    await Promise.all(writePromises);
+  }
+
   async startExport(startDate, endDate, overwrite) {
     const parsedStartDate = Date.parse(startDate);
     const parsedEndDate = Date.parse(endDate);
@@ -167,11 +189,11 @@ class AnalyticsExport {
 
     // Run in for loop to synchronously send each request to avoid hitting rate limit
     for (const [dimension, measures] of measuresByDimension) {
-      if (!dimensionToTableSuffix.includes(dimension)) {
+      if (!(dimension in dimensionToTableSuffix)) {
         continue;
       }
       for (const measure of measures) {
-        if (!measureToTablePrefix.includes(measure)) {
+        if (!(measure in measureToTablePrefix)) {
           continue;
         }
         let retry;
@@ -209,25 +231,12 @@ class AnalyticsExport {
         } while (retry);
 
         if (dataByDate !== null) {
-          for (const [date, data] of dataByDate) {
-            if (data.length === 0) {
-              continue;
-            }
-            bqClient
-              .writeData(measure, dimension, date, data, overwrite)
-              .then((tableName) =>
-                console.log(`Wrote to table ${tableName} for ${date}`),
-              )
-              .catch((err) => {
-                console.error(
-                  `Failed to write to table ${measure} by ${dimension} for ${date}: ${err}`,
-                );
-              });
-          }
+          await AnalyticsExport.writeData(bqClient, measure, dimension, dataByDate, overwrite)
+            .then(() => console.log(`Finished writing to table for ${measure} by ${dimension}`));
         }
       }
     }
   }
 }
 
-exports.AnalyticExport = AnalyticsExport;
+exports.AnalyticsExport = AnalyticsExport;
