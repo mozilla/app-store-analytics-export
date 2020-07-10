@@ -1,27 +1,22 @@
 "use strict";
 
-
 const proxyquire = require("proxyquire");
 const { assert } = require("chai");
-import { describe, it } from "mocha";
+const { beforeEach, describe, it } = require("mocha");
 const { stub } = require("sinon");
 
-const { BigqueryClient } = require("../analytics_export/bigqueryClient")
+const { BigqueryClient } = require("../analytics_export/bigqueryClient");
 
 describe("BigqueryClient", () => {
   describe("factory", () => {
-    const mockBigqueryClient = (mockDataset) => (
-      proxyquire(
-        "../analytics_export/bigqueryClient.js",
-        {
-          "@google-cloud/bigquery": {
-            BigQuery: stub().callsFake(() => ({
-              dataset: stub().returns(mockDataset),
-            })),
-          },
+    const mockBigqueryClient = (mockDataset) =>
+      proxyquire("../analytics_export/bigqueryClient.js", {
+        "@google-cloud/bigquery": {
+          BigQuery: stub().callsFake(() => ({
+            dataset: stub().returns(mockDataset),
+          })),
         },
-      )
-    );
+      });
 
     it("should create the dataset if it does not exist", async () => {
       const mockDataset = {
@@ -59,7 +54,7 @@ describe("BigqueryClient", () => {
   });
 
   describe("create table", () => {
-    const tableName = "tabby";
+    const tableName = "impressions_by_app_version";
 
     it("should create table if it does not exist", async () => {
       const mockTable = {
@@ -71,7 +66,7 @@ describe("BigqueryClient", () => {
       };
       const bigqueryClient = new BigqueryClient(mockDataset);
 
-      await bigqueryClient.createTableIfNotExists(tableName, [], "");
+      await bigqueryClient.createTableIfNotExists("impressionsTotal", "appVersion");
 
       assert.isTrue(mockTable.exists.calledOnce);
       assert.isTrue(mockDataset.table.calledOnce);
@@ -90,7 +85,7 @@ describe("BigqueryClient", () => {
 
       const bigqueryClient = new BigqueryClient(mockDataset);
 
-      await bigqueryClient.createTableIfNotExists(tableName, [], "");
+      await bigqueryClient.createTableIfNotExists("impressionsTotal", "appVersion");
 
       assert.isTrue(mockTable.exists.calledOnce);
       assert.isTrue(mockDataset.table.calledOnce);
@@ -115,17 +110,14 @@ describe("BigqueryClient", () => {
 
       mockFs = {
         writeFileSync: stub(),
-      }
+      };
 
-      mockBigqueryClient = proxyquire(
-        "../analytics_export/bigqueryClient.js",
-        {
-          fs: mockFs,
-          tempy: {
-            file: () => "file.csv",
-          },
+      mockBigqueryClient = proxyquire("../analytics_export/bigqueryClient.js", {
+        fs: mockFs,
+        tempy: {
+          file: () => "file.csv",
         },
-      );
+      });
     });
 
     it("should give the correct table name based on measure and dimension", async () => {
@@ -139,7 +131,7 @@ describe("BigqueryClient", () => {
         true,
       );
 
-      assert.equal(tableName, "impressions_by_region");
+      assert.strictEqual(tableName, "impressions_by_region");
     });
 
     it("should give the correct table name for null dimensions", async () => {
@@ -153,18 +145,18 @@ describe("BigqueryClient", () => {
         true,
       );
 
-      assert.equal(tableName, "impressions_total");
+      assert.strictEqual(tableName, "impressions_total");
     });
 
     it("should write the correct data to a temporary file", async () => {
       const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
 
       const data = [
-        { date: "2020-07-07", app_name: "Firefox", value: 1, region: "a" },
-        { date: "2020-07-07", app_name: "Firefox", value: 2, region: "a" },
-      ]
+        { date: "2020-07-07", app_name: "Firefox", impressions: 1, region: "a" },
+        { date: "2020-07-07", app_name: "Firefox", impressions: 2, region: "a" },
+      ];
 
-      const tableName = await bqClient.writeData(
+      await bqClient.writeData(
         "impressionsTotal",
         "region",
         "2020-07-01",
@@ -172,7 +164,8 @@ describe("BigqueryClient", () => {
         true,
       );
 
-      const writtenData = "2020-07-07\tFirefox\t1\ta\n2020-07-07\tFirefox\t2\ta";
+      const writtenData =
+        "2020-07-07\tFirefox\t1\ta\n2020-07-07\tFirefox\t2\ta";
       assert.isTrue(mockFs.writeFileSync.calledWith("file.csv", writtenData));
     });
 
@@ -189,8 +182,9 @@ describe("BigqueryClient", () => {
       );
 
       assert.isTrue(mockDataset.table.calledOnce);
-      assert.isTrue(mockDataset.table.calledOnceWithExactly(`${tableName}$20200701`));
+      assert.isTrue(
+        mockDataset.table.calledOnceWithExactly(`${tableName}$20200701`),
+      );
     });
-
   });
 });
