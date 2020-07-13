@@ -190,10 +190,7 @@ class AnalyticsExport {
       if (!(dimension in dimensionToTableSuffix)) {
         continue;
       }
-      for (const measure of measures) {
-        if (!(measure in metricData)) {
-          continue;
-        }
+      for (const measure of measures.filter((m) => m in metricData)) {
         let retry;
         let retryCount = 0;
         let dataByDate = null;
