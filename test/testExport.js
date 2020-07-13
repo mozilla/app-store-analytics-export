@@ -1,12 +1,16 @@
 "use strict";
 
 const proxyquire = require("proxyquire");
-const { assert } = require("chai");
+const chai = require("chai");
+const chaiAsPromised = require("chai-as-promised");
 const { beforeEach, describe, it } = require("mocha");
 const { spy, stub } = require("sinon");
 
 const { AnalyticsExport } = require("../analytics_export/analyticsExport");
 const { RequestError } = require("../analytics_export/requestError");
+
+chai.use(chaiAsPromised);
+const { assert } = chai;
 
 describe("Analytics export", () => {
   describe("getAllowedDimensionsPerMeasure", () => {
@@ -35,41 +39,34 @@ describe("Analytics export", () => {
       });
       analyticsExport.client = mockItcClient;
 
-      const getAllowedDimensionsSpy = spy(
+      analyticsExport.getAllowedDimensionsPerMeasure = spy(
         analyticsExport,
         "getAllowedDimensionsPerMeasure",
       );
 
-      let throwCount = 0;
-
-      try {
-        await getAllowedDimensionsSpy(
+      await assert.isRejected(
+        analyticsExport.getAllowedDimensionsPerMeasure(
           Date.parse("2020-01-01"),
           Date.parse("2020-01-02"),
-        );
-      } catch (e) {
-        throwCount += 1;
-      }
+        ),
+        "Date out of range",
+      );
 
-      try {
-        await getAllowedDimensionsSpy(
-          Date.parse("2019-12-30"),
-          Date.parse("2020-01-01"),
-        );
-      } catch (e) {
-        throwCount += 1;
-      }
+      await assert.isRejected(
+        analyticsExport.getAllowedDimensionsPerMeasure(
+          Date.parse("2020-01-02"),
+          Date.parse("2020-01-05"),
+        ),
+        "Date out of range",
+      );
 
-      try {
-        await getAllowedDimensionsSpy(
-          Date.parse("2020-01-30"),
-          Date.parse("2020-02-01"),
-        );
-      } catch (e) {
-        throwCount += 1;
-      }
-
-      assert.strictEqual(throwCount, 3);
+      await assert.isRejected(
+        analyticsExport.getAllowedDimensionsPerMeasure(
+          Date.parse("2019-01-02"),
+          Date.parse("2019-01-02"),
+        ),
+        "Date out of range",
+      );
     });
 
     it("should correctly group metrics with allowed dimensions", async () => {
