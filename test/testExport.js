@@ -165,13 +165,14 @@ describe("Analytics export", () => {
       );
     });
 
-    it("should retry query fetch on api rate limit errors", async () => {
+    it("should retry query fetch on api rate limit errors with increasing backoff", async () => {
       analyticsExport.getAllowedDimensionsPerMeasure = stub().resolves([
         ["appVersion", ["impressionsTotal"]],
       ]);
       analyticsExport.getMetric = stub().throws(new RequestError("", 429));
 
-      await analyticsExport.startExport("2020-01-01", "2020-01-01", true)
+      await analyticsExport
+        .startExport("2020-01-01", "2020-01-01", true)
         .catch(() => {});
 
       assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.notCalled);
@@ -181,7 +182,7 @@ describe("Analytics export", () => {
         .reduce((prev, cur) => {
           assert.isTrue(cur > prev);
           return cur;
-        });
+        }, 0);
     });
 
     it("should not retry errors that are not due to api limit", async () => {
@@ -191,7 +192,8 @@ describe("Analytics export", () => {
       ]);
       analyticsExport.getMetric = stub().throws(new RequestError("", 403));
 
-      await analyticsExport.startExport("2020-01-01", "2020-01-01", true)
+      await analyticsExport
+        .startExport("2020-01-01", "2020-01-01", true)
         .catch(() => {});
 
       assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.notCalled);
