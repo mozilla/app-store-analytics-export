@@ -19,20 +19,7 @@ To install dependencies use:
 yarn
 ```
 
-To run the export use `yarn export` which takes the following arguments:
-```sh
---help        Show help                                                 [boolean]
---version     Show version number                                       [boolean]
---username    App store connect user to authenticate with               [required]
---password    Password for the given app store connect user             [required]
---app-id      ID of the app for which data will exported                [required]
---app-name    Human-readable name of the app to use in exported data    [required]
---start-date  First date to pull data for as YYYY-MM-DD                 [required]
---end-date    Last date to pull data for as YYYY-MM-DD (defaults to start-date if not given)
---project     Bigquery project ID                                       [required]
---dataset     Bigquery dataset to save data to                          [default: "apple_app_store"]
---overwrite   Overwrite partition of destination table
-```
+To run the export use `yarn export`.  Use `yarn export --help` to view supported options.
 
 e.g.
 ```sh
