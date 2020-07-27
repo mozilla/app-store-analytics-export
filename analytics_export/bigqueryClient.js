@@ -88,7 +88,7 @@ class BigqueryClient {
     return schema;
   }
 
-  async writeData(measure, dimension, date, data, overwrite) {
+  async writeData(appName, measure, dimension, date, data, overwrite) {
     const schema = BigqueryClient.getSchema(measure, dimension);
     const tableName = BigqueryClient.getTableName(measure, dimension);
 
@@ -110,6 +110,10 @@ class BigqueryClient {
     const table = this.dataset.table(`${tableName}$${date.replace(/-/g, "")}`);
 
     await this.loadSemaphore.use(async () => {
+      await table.query(
+        `DELETE FROM ${tableName} WHERE date = '${date}' AND app_name = '${appName}'`,
+      );
+
       await table.load(csvPath, {
         format: "CSV",
         createDisposition: "CREATE_NEVER",
