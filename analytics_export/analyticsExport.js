@@ -136,7 +136,14 @@ class AnalyticsExport {
     return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
   }
 
-  static async writeData(bqClient, measure, dimension, dataByDate, overwrite) {
+  static async writeData(
+    bqClient,
+    appName,
+    measure,
+    dimension,
+    dataByDate,
+    overwrite,
+  ) {
     await bqClient.createTableIfNotExists(measure, dimension);
 
     const writePromises = [];
@@ -148,7 +155,7 @@ class AnalyticsExport {
 
       writePromises.push(
         bqClient
-          .writeData(measure, dimension, date, data, overwrite)
+          .writeData(appName, measure, dimension, date, data, overwrite)
           .catch((err) => {
             console.error(
               `Failed to write to table ${measure} by ${dimension} for ${date}: ${err}`,
@@ -229,6 +236,7 @@ class AnalyticsExport {
         if (dataByDate !== null) {
           await AnalyticsExport.writeData(
             bqClient,
+            this.appName,
             measure,
             dimension,
             dataByDate,
