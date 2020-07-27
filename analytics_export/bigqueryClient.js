@@ -110,6 +110,7 @@ class BigqueryClient {
     const table = this.dataset.table(`${tableName}$${date.replace(/-/g, "")}`);
 
     await this.loadSemaphore.use(async () => {
+      // Always delete data for the app for the day so that duplicate data isn't written
       await table.query(
         `DELETE FROM ${tableName} WHERE date = '${date}' AND app_name = '${appName}'`,
       );
