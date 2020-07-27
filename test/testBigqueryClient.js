@@ -109,6 +109,7 @@ describe("BigqueryClient", () => {
       mockTable = {
         exists: stub().returns([true]),
         load: stub(),
+        query: stub(),
       };
       mockDataset = {
         table: stub().returns(mockTable),
@@ -130,6 +131,7 @@ describe("BigqueryClient", () => {
       const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
 
       const tableName = await bqClient.writeData(
+        "appName",
         "impressionsTotal",
         "region",
         "2020-07-01",
@@ -144,6 +146,7 @@ describe("BigqueryClient", () => {
       const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
 
       const tableName = await bqClient.writeData(
+        "appName",
         "impressionsTotal",
         null,
         "2020-07-01",
@@ -173,6 +176,7 @@ describe("BigqueryClient", () => {
       ];
 
       await bqClient.writeData(
+        "appName",
         "impressionsTotal",
         "region",
         "2020-07-01",
@@ -190,6 +194,7 @@ describe("BigqueryClient", () => {
       bqClient.createTableIfNotExists = stub();
 
       const tableName = await bqClient.writeData(
+        "appName",
         "impressionsTotal",
         "region",
         "2020-07-01",
