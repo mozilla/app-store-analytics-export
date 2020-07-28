@@ -48,6 +48,7 @@ describe("Analytics export", () => {
         analyticsExport.getAllowedDimensionsPerMeasure(
           Date.parse("2020-01-01"),
           Date.parse("2020-01-02"),
+          true,
         ),
         "Date out of range",
       );
@@ -56,6 +57,7 @@ describe("Analytics export", () => {
         analyticsExport.getAllowedDimensionsPerMeasure(
           Date.parse("2020-01-02"),
           Date.parse("2020-01-05"),
+          true,
         ),
         "Date out of range",
       );
@@ -64,8 +66,56 @@ describe("Analytics export", () => {
         analyticsExport.getAllowedDimensionsPerMeasure(
           Date.parse("2019-01-02"),
           Date.parse("2019-01-02"),
+          true,
         ),
         "Date out of range",
+      );
+    });
+
+    it("should fail if data includes incomplete data for a day", async () => {
+      stub(mockItcClient, "getSettings").callsArgWith(0, null, {
+        configuration: {
+          dataStartDate: "2020-01-02T00:00:00",
+          dataEndDate: "2020-01-03T00:00:00",
+        },
+      });
+      analyticsExport.client = mockItcClient;
+
+      analyticsExport.getAllowedDimensionsPerMeasure = spy(
+        analyticsExport,
+        "getAllowedDimensionsPerMeasure",
+      );
+
+      await assert.isRejected(
+        analyticsExport.getAllowedDimensionsPerMeasure(
+          Date.parse("2020-01-03"),
+          Date.parse("2020-01-03"),
+          false,
+        ),
+        "has incomplete data",
+      );
+    });
+
+    it("should allow incomplete data if argument is given", async () => {
+      stub(mockItcClient, "getSettings").callsArgWith(0, null, {
+        configuration: {
+          dataStartDate: "2020-01-02T00:00:00",
+          dataEndDate: "2020-01-03T00:00:00",
+        },
+        dimensions: [],
+        measures: [],
+      });
+      analyticsExport.client = mockItcClient;
+
+      analyticsExport.getAllowedDimensionsPerMeasure = spy(
+        analyticsExport,
+        "getAllowedDimensionsPerMeasure",
+      );
+
+      await analyticsExport.getAllowedDimensionsPerMeasure(
+        Date.parse("2020-01-03"),
+        Date.parse("2020-01-03"),
+        true,
       );
     });
 
@@ -112,6 +162,7 @@ describe("Analytics export", () => {
       const measuresByDimension = await analyticsExport.getAllowedDimensionsPerMeasure(
         Date.parse("2020-01-30"),
         Date.parse("2020-02-01"),
+        true,
       );
 
       assert.lengthOf(measuresByDimension.get("appVersion"), 2);
@@ -169,7 +220,7 @@ describe("Analytics export", () => {
       analyticsExport.getMetric = stub().throws(new RequestError("", 429));
 
       await analyticsExport
-        .startExport("2020-01-01", "2020-01-01", true)
+        .startExport("2020-01-01", "2020-01-01", true, true)
         .catch(() => {});
 
       assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.notCalled);
@@ -190,7 +241,7 @@ describe("Analytics export", () => {
       analyticsExport.getMetric = stub().throws(new RequestError("", 403));
 
       await analyticsExport
-        .startExport("2020-01-01", "2020-01-01", true)
+        .startExport("2020-01-01", "2020-01-01", true, true)
         .catch(() => {});
 
       assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.notCalled);
@@ -204,7 +255,7 @@ describe("Analytics export", () => {
       ]);
       analyticsExport.getMetric = stub().resolves({});
 
-      await analyticsExport.startExport("2020-01-01", "2020-01-01", true);
+      await analyticsExport.startExport("2020-01-01", "2020-01-01", true, true);
 
       assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.calledOnce);
       assert.equal(analyticsExport.getMetric.callCount, 1);
