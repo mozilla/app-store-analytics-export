@@ -22,7 +22,11 @@ class AnalyticsExport {
    * Return a Map where key is a dimension key and value is an array of measure keys
    * that can be grouped by the dimension
    */
-  async getAllowedDimensionsPerMeasure(startTimestamp, endTimestamp) {
+  async getAllowedDimensionsPerMeasure(
+    startTimestamp,
+    endTimestamp,
+    allowIncomplete,
+  ) {
     const getSettings = util
       .promisify(this.client.getSettings)
       .bind(this.client);
@@ -38,6 +42,15 @@ class AnalyticsExport {
       throw Error(
         `Date out of range; data exists for ${dataStartDate} to ${dataEndDate}`,
       );
+    }
+
+    if (endTimestamp === Date.parse(dataEndDate)) {
+      const warningString = `${dataEndDate} has incomplete data`;
+      if (allowIncomplete) {
+        console.log(warningString);
+      } else {
+        throw Error(`${warningString}; set --allowIncomplete to allow this`);
+      }
     }
 
     const measuresByDimension = new Map();
@@ -167,7 +180,7 @@ class AnalyticsExport {
     await Promise.all(writePromises);
   }
 
-  async startExport(startDate, endDate, overwrite) {
+  async startExport(startDate, endDate, overwrite, allowIncomplete) {
     const parsedStartDate = Date.parse(startDate);
     const parsedEndDate = Date.parse(endDate);
     if (Number.isNaN(parsedStartDate) || Number.isNaN(parsedEndDate)) {
@@ -181,6 +194,7 @@ class AnalyticsExport {
     const measuresByDimension = await this.getAllowedDimensionsPerMeasure(
       parsedStartDate,
       parsedEndDate,
+      allowIncomplete,
     ).catch((err) => {
       throw new Error(`Failed to get analytics metadata: ${err}`);
     });

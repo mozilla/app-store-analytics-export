@@ -17,8 +17,12 @@ const { argv } = require("yargs")
   )
   .describe("project", "Bigquery project ID")
   .describe("dataset", "Bigquery dataset to save data to")
-  .default("dataset", "apple_app_store")
   .describe("overwrite", "Overwrite partition of destination table")
+  .default("overwrite", false)
+  .boolean("overwrite")
+  .describe("allow-incomplete", "Allow export of incomplete day of data")
+  .default("allow-incomplete", false)
+  .boolean("allow-incomplete")
   .demandOption([
     "username",
     "password",
@@ -57,7 +61,12 @@ authenticate(argv.username, argv.password)
     );
 
     analyticsExport
-      .startExport(argv.startDate, endDate, argv.overwrite)
+      .startExport(
+        argv.startDate,
+        endDate,
+        argv.overwrite,
+        argv.allowIncomplete,
+      )
       .catch((err) => {
         console.error(err);
         process.exit(1);
