@@ -4,6 +4,7 @@ const fetch = require("node-fetch");
 const itc = require("itunesconnectanalytics");
 const url = require("url");
 const util = require("util");
+const { FetchError } = require("node-fetch");
 
 const { BigqueryClient } = require("./bigqueryClient");
 const { metricData, dimensionToTableSuffix } = require("./tableMetadata");
@@ -229,15 +230,20 @@ class AnalyticsExport {
             console.error(
               `Failed to get ${measure} by ${dimension}: ${err.message}`,
             );
-            if (err.errorCode === 429) {
+            if (err instanceof RequestError && err.errorCode === 429) {
               console.error(
                 `Retrying in ${retryDelay} seconds due to API rate limit`,
               );
-              retry = true;
-              retryCount += 1;
+            } else if (err instanceof FetchError) {
+              console.error(
+                `Possibly intermittent error, retrying ${retryDelay} seconds`,
+              );
+              console.error(err);
             } else {
               throw err;
             }
+            retry = true;
+            retryCount += 1;
           }
           await AnalyticsExport.sleep(retryDelay);
           if (retryCount >= 5 && retry === true) {

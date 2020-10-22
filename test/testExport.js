@@ -5,6 +5,7 @@ const chai = require("chai");
 const chaiAsPromised = require("chai-as-promised");
 const { beforeEach, describe, it } = require("mocha");
 const { spy, stub } = require("sinon");
+const { FetchError } = require("node-fetch");
 
 const { AnalyticsExport } = require("../analytics_export/analyticsExport");
 const { RequestError } = require("../analytics_export/requestError");
@@ -233,7 +234,21 @@ describe("Analytics export", () => {
         }, 0);
     });
 
-    it("should not retry errors that are not due to api limit", async () => {
+    it("should retry query fetch on FetchError", async () => {
+      analyticsExport.getAllowedDimensionsPerMeasure = stub().resolves([
+        ["appVersion", ["impressionsTotal"]],
+      ]);
+      analyticsExport.getMetric = stub().throws(new FetchError(""));
+
+      await analyticsExport
+        .startExport("2020-01-01", "2020-01-01", true, true)
+        .catch(() => {});
+
+      assert.isTrue(analyticsExportProxy.AnalyticsExport.writeData.notCalled);
+      assert.equal(analyticsExport.getMetric.callCount, 5);
+    });
+
+    it("should not retry HTTP errors that are not due to api limit", async () => {
       analyticsExport.getAllowedDimensionsPerMeasure = stub().resolves([
         ["appVersion", ["impressionsTotal", "pageViewCount"]],
         ["platformVersion", ["impressionsTotal"]],
