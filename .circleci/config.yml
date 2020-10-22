@@ -7,7 +7,8 @@ commands:
   restore-docker:
     description: Restore Docker image cache
     steps:
-      - setup_remote_docker
+      - setup_remote_docker:
+          version: 19.03.13
       - restore_cache:
           key: v1-{{.Branch}}
       - run:
@@ -20,7 +21,8 @@ jobs:
       - image: docker:stable-git
     steps:
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          version: 19.03.13
       - run:
           name: Build Docker image
           command: docker build -t app:build .
@@ -34,7 +36,7 @@ jobs:
 
   test:
     docker:
-      - image: docker:18.06.0-ce
+      - image: docker:stable-git
     steps:
       - restore-docker
       - run:
