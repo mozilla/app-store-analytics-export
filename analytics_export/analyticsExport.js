@@ -234,7 +234,12 @@ class AnalyticsExport {
               console.error(
                 `Retrying in ${retryDelay} seconds due to API rate limit`,
               );
-            } else if (err instanceof FetchError) {
+            } else if (
+              err instanceof FetchError ||
+              // 2020-11-17: App store API recently started returning 500s frequently
+              // Apple support has been contacted so this is hopefully a temp workaround
+              (err instanceof RequestError && err.errorCode === 500)
+            ) {
               console.error(
                 `Possibly intermittent error, retrying ${retryDelay} seconds`,
               );
