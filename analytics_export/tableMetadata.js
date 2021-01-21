@@ -18,6 +18,13 @@ const metricData = {
     optin: true,
     type: "INT64",
   },
+  iap: {
+    name: "iap",
+    description:
+      "The number of first time purchases of an in-app purchase on a device using iOS8 and tvOS 9 or later. Restored in-app purchases are not counted.",
+    optin: false,
+    type: "INT64",
+  },
   impressionsTotal: {
     name: "impressions",
     description:
@@ -60,11 +67,25 @@ const metricData = {
     optin: false,
     type: "INT64",
   },
+  payingUsers: {
+    name: "paying_users",
+    description:
+      "The number of unique users that paid for an app or in-app purchase.",
+    optin: false,
+    type: "INT64",
+  },
   rollingActiveDevices: {
     name: "active_devices_last_30_days",
     description:
       "The total number of devices with atleast one session within 30 days of the selected day",
     optin: true,
+    type: "INT64",
+  },
+  sales: {
+    name: "sales",
+    description:
+      "The total amount billed to customers for purchasing apps, app bundles, and in-app purchases. Taxes are only included in the sales if those taxes were included in the App Store price. Not the same as proceeds (sales including Apple's 30% cut)",
+    optin: false,
     type: "INT64",
   },
   sessions: {
