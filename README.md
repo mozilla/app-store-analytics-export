@@ -19,7 +19,7 @@ The dimensions for the metrics will be automatically detected.
 This job exports a table for each metric and dimension combination.
 This [script in bigquery-etl](https://github.com/mozilla/bigquery-etl/blob/master/script/marketing/generate_app_store_queries.py)
 generates sql that combines all the metrics by dimension, creating one table per dimension.
-The script checks for existing tables in BigQuery so it must be run after the new metrics are added.
+The script checks for existing tables in BigQuery so it must be run after the new metrics have been exported at least once.
 
 Official documentation of metrics and dimensions can be found at 
 https://help.apple.com/app-store-connect/#/itc21781223f
