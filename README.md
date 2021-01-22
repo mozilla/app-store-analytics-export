@@ -10,6 +10,20 @@ This export uses the
 [iTunesConnectAnalytics](https://github.com/JanHalozan/iTunesConnectAnalytics) package to handle authentication.
 A username and password for App Store Connect is required to use the script. 
 
+### Adding Metrics To Export
+
+To add new metrics to export, add an entry to `metricData` in
+[`analytics_export/tableMetadata.js`](analytics_export/tableMetadata.js).
+The dimensions for the metrics will be automatically detected.
+
+This job exports a table for each metric and dimension combination.
+This [script in bigquery-etl](https://github.com/mozilla/bigquery-etl/blob/master/script/marketing/generate_app_store_queries.py)
+generates sql that combines all the metrics by dimension, creating one table per dimension.
+The script checks for existing tables in BigQuery so it must be run after the new metrics are added.
+
+Official documentation of metrics and dimensions can be found at 
+https://help.apple.com/app-store-connect/#/itc21781223f
+
 ## Usage
 
 This project uses `yarn` to manage dependencies and was developed with nodejs 12.
