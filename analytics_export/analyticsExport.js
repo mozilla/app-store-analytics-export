@@ -29,7 +29,7 @@ class AnalyticsExport {
     allowIncomplete,
   ) {
     const getSettings = util
-      .promisify(this.client.getSettings)
+      .promisify(this.client.getSettings) // TODO: replace
       .bind(this.client);
     const settings = await getSettings();
 
@@ -105,7 +105,7 @@ class AnalyticsExport {
     const response = await fetch(url.parse(query.apiURL + query.endpoint), {
       method: "POST",
       body: JSON.stringify(query.assembleBody()),
-      headers: this.client.getHeaders(),
+      headers: this.client.getHeaders(),  // TODO: replace
     });
     const data = await response.json();
     if (!response.ok) {
