@@ -105,7 +105,7 @@ class AnalyticsExport {
     const response = await fetch(url.parse(query.apiURL + query.endpoint), {
       method: "POST",
       body: JSON.stringify(query.assembleBody()),
-      headers: this.client.getHeaders(),  // TODO: replace
+      headers: this.client.getHeaders(), // TODO: replace
     });
     const data = await response.json();
     if (!response.ok) {
