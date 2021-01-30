@@ -1,6 +1,7 @@
 "use strict";
 
 const fetch = require("node-fetch");
+const readline = require("readline");
 const url = require("url");
 
 const { RequestError } = require("./requestError");
@@ -45,7 +46,7 @@ class AnalyticsClient {
 
   async login(username, password) {
     const loginBaseUrl = "https://idmsa.apple.com/appleauth/auth";
-    const widgetKeyHeader = {
+    const loginHeaders = {
       "X-Apple-Widget-Key":
         "e0b80c3bf78523bfe80974d320935bfa30add02e1bff88ec2166c6bd5a706c42",
     };
@@ -60,13 +61,42 @@ class AnalyticsClient {
           password: password,
           rememberMe: false,
         }),
-        headers: { ...this.getHeaders(), ...widgetKeyHeader },
+        headers: { ...this.getHeaders(), ...loginHeaders },
       },
     );
 
     if (!loginResponse.ok && loginResponse.status === 409) {
-      // handle 2sv
+      loginHeaders["X-Apple-ID-Session-Id"] = loginResponse.headers.get(
+        "X-Apple-ID-Session-Id",
+      );
       console.log("Attempting to handle 2-step verification");
+      const codeRequestResponse = await fetch(loginBaseUrl, {
+        headers: { ...this.getHeaders(), ...loginHeaders },
+      });
+
+      if (!codeRequestResponse.ok) {
+        let message = "";
+        if (codeRequestResponse.status === 423) {
+          message =
+            "Too many codes requested, try again later or use last code";
+        }
+        throw new RequestError(
+          `Error requesting 2SV code: ${loginResponse.status} ${loginResponse.statusText} ${message}`,
+          loginResponse.status,
+        );
+      }
+
+      const prompt = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      let code;
+      prompt.question("Enter 2SV code: ", (input) => {
+        code = input;
+      });
+      console.log(code);
+
+      // TODO: send back code
     } else if (!loginResponse.ok) {
       let message;
       if (loginResponse.status === 401) {
@@ -75,7 +105,7 @@ class AnalyticsClient {
         message = "Unrecognized error";
       }
       throw new RequestError(
-        `${loginResponse.status} ${loginResponse.statusText} ${message}`,
+        `Could not log in: ${loginResponse.status} ${loginResponse.statusText} ${message}`,
         loginResponse.status,
       );
     }
@@ -93,7 +123,7 @@ class AnalyticsClient {
 
     if (!sessionResponse.ok) {
       throw new RequestError(
-        "Could not get session cookie",
+        `Could not get session cookie: ${loginResponse.status} ${loginResponse.statusText}`,
         sessionResponse.status,
       );
     }
