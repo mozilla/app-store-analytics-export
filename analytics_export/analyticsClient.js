@@ -7,14 +7,14 @@ const url = require("url");
 const { RequestError } = require("./requestError");
 
 class AnalyticsClient {
-  apiBaseUrl = "https://appstoreconnect.apple.com/olympus/v1";
-
-  headers = {
-    "Content-Type": "application/json",
-    Accept: "application/json, text/javascript, */*",
-  };
-
-  cookies = {};
+  constructor() {
+    this.apiBaseUrl = "https://appstoreconnect.apple.com/olympus/v1";
+    this.headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/javascript, */*",
+    };
+    this.cookies = {};
+  }
 
   addCookie(key, value) {
     this.cookies[key] = value;
@@ -52,8 +52,8 @@ class AnalyticsClient {
     };
 
     // Initial login request
-    const loginResponse = await fetch(
-      url.parse(loginBaseUrl + "/signin?isRememberMeEnabled=true"),
+    let loginResponse = await fetch(
+      `${loginBaseUrl}/signin?isRememberMeEnabled=true`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -69,35 +69,56 @@ class AnalyticsClient {
       loginHeaders["X-Apple-ID-Session-Id"] = loginResponse.headers.get(
         "X-Apple-ID-Session-Id",
       );
+      loginHeaders["scnt"] = loginResponse.headers.get("scnt");
       console.log("Attempting to handle 2-step verification");
       const codeRequestResponse = await fetch(loginBaseUrl, {
         headers: { ...this.getHeaders(), ...loginHeaders },
       });
 
       if (!codeRequestResponse.ok) {
-        let message = "";
         if (codeRequestResponse.status === 423) {
-          message =
-            "Too many codes requested, try again later or use last code";
+          console.log(
+            "Too many codes requested, try again later or use last code",
+          );
+        } else {
+          throw new RequestError(
+            `Error requesting 2SV code: ${loginResponse.status} ${loginResponse.statusText} ${message}`,
+            loginResponse.status,
+          );
         }
-        throw new RequestError(
-          `Error requesting 2SV code: ${loginResponse.status} ${loginResponse.statusText} ${message}`,
-          loginResponse.status,
-        );
       }
 
       const prompt = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
       });
-      let code;
-      prompt.question("Enter 2SV code: ", (input) => {
-        code = input;
-      });
-      console.log(code);
 
-      // TODO: send back code
-    } else if (!loginResponse.ok) {
+      const code = await new Promise((resolve, reject) => {
+        prompt.question("Enter 2SV code: ", (input) => {
+          resolve(input);
+        });
+      });
+      prompt.close();
+
+      if (code === "") {
+        throw new Error("No 2SV code given");
+      }
+
+      // 2SV response is used like the initial login response
+      loginResponse = await fetch(loginBaseUrl + "/verify/phone/securitycode", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "sms",
+          phoneNumber: { id: 1 },
+          securityCode: {
+            code,
+          },
+        }),
+        headers: { ...this.getHeaders(), ...loginHeaders },
+      });
+    }
+
+    if (!loginResponse.ok) {
       let message;
       if (loginResponse.status === 401) {
         message = "Invalid username and password";
