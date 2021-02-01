@@ -58,7 +58,7 @@ class AnalyticsClient {
         method: "POST",
         body: JSON.stringify({
           accountName: username,
-          password: password,
+          password,
           rememberMe: false,
         }),
         headers: { ...this.getHeaders(), ...loginHeaders },
@@ -69,7 +69,7 @@ class AnalyticsClient {
       loginHeaders["X-Apple-ID-Session-Id"] = loginResponse.headers.get(
         "X-Apple-ID-Session-Id",
       );
-      loginHeaders["scnt"] = loginResponse.headers.get("scnt");
+      loginHeaders.scnt = loginResponse.headers.get("scnt");
       console.log("Attempting to handle 2-step verification");
       const codeRequestResponse = await fetch(loginBaseUrl, {
         headers: { ...this.getHeaders(), ...loginHeaders },
@@ -82,7 +82,7 @@ class AnalyticsClient {
           );
         } else {
           throw new RequestError(
-            `Error requesting 2SV code: ${loginResponse.status} ${loginResponse.statusText} ${message}`,
+            `Error requesting 2SV code: ${loginResponse.status} ${loginResponse.statusText}`,
             loginResponse.status,
           );
         }
@@ -93,7 +93,7 @@ class AnalyticsClient {
         output: process.stdout,
       });
 
-      const code = await new Promise((resolve, reject) => {
+      const code = await new Promise((resolve) => {
         prompt.question("Enter 2SV code: ", (input) => {
           resolve(input);
         });
@@ -105,7 +105,7 @@ class AnalyticsClient {
       }
 
       // 2SV response is used like the initial login response
-      loginResponse = await fetch(loginBaseUrl + "/verify/phone/securitycode", {
+      loginResponse = await fetch(`${loginBaseUrl}/verify/phone/securitycode`, {
         method: "POST",
         body: JSON.stringify({
           mode: "sms",
@@ -136,7 +136,7 @@ class AnalyticsClient {
 
     // Request session cookie
     const sessionResponse = await fetch(
-      url.parse(this.apiBaseUrl + "/session"),
+      url.parse(`${this.apiBaseUrl}/session`),
       {
         headers: this.getHeaders(),
       },
@@ -153,10 +153,10 @@ class AnalyticsClient {
 }
 
 // TODO: Remove testing
-let client = new AnalyticsClient();
+const client = new AnalyticsClient();
 client
   .login(process.argv[2], process.argv[3])
-  .then((result) => {
+  .then(() => {
     console.log("fsddfs");
   })
   .catch((err) => {
