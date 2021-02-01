@@ -16,17 +16,11 @@ class AnalyticsClient {
     this.cookies = {};
   }
 
-  addCookie(key, value) {
-    this.cookies[key] = value;
-  }
-
-  getCookies() {
-    return Object.entries(this.cookies)
-      .map(([k, v]) => `${k}=${v};`)
-      .join(" ");
-  }
-
-  extractCookie(response, key) {
+  /**
+   * Extract given cookie key from the set-cookie header of the given response and
+   * update class instance's cookies
+   */
+  setCookie(response, key) {
     try {
       const sessionInfo = new RegExp(`${key}=.+?;`)
         .exec(response.headers.get("set-cookie"))[0]
@@ -34,18 +28,40 @@ class AnalyticsClient {
       if (sessionInfo.length !== 2) {
         throw new TypeError();
       }
-      this.addCookie(sessionInfo[0], sessionInfo[1]);
+      [, this.cookies[sessionInfo[0]]] = sessionInfo;
     } catch (TypeError) {
-      throw new Error(`Could not ${key} cookie`);
+      throw new Error(`Could not get ${key} cookie`);
     }
   }
 
+  /**
+   * Return default headers with cookie header set
+   */
   getHeaders() {
-    return { ...this.headers, Cookie: this.getCookies() };
+    const cookies = Object.entries(this.cookies)
+      .map(([k, v]) => `${k}=${v};`)
+      .join(" ");
+    return { ...this.headers, Cookie: cookies };
   }
 
+  /**
+   * Check if the given response returned an error, throwing a RequestError
+   * if there is an error
+   */
+  static checkResponseForError(response, startMessage, endMessage) {
+    if (!response) {
+      throw new RequestError(
+        `${startMessage}: ${response.status} ${response.statusText} ${endMessage}`,
+        response.status,
+      );
+    }
+  }
+
+  /**
+   * Retrieve account and session cookies using username and password
+   */
   async login(username, password) {
-    const loginBaseUrl = "https://idmsa.apple.com/appleauth/auth";
+    const baseUrl = "https://idmsa.apple.com/appleauth/auth";
     const loginHeaders = {
       "X-Apple-Widget-Key":
         "e0b80c3bf78523bfe80974d320935bfa30add02e1bff88ec2166c6bd5a706c42",
@@ -53,7 +69,7 @@ class AnalyticsClient {
 
     // Initial login request
     let loginResponse = await fetch(
-      `${loginBaseUrl}/signin?isRememberMeEnabled=true`,
+      `${baseUrl}/signin?isRememberMeEnabled=true`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -66,12 +82,12 @@ class AnalyticsClient {
     );
 
     if (!loginResponse.ok && loginResponse.status === 409) {
+      console.log("Attempting to handle 2-step verification");
       loginHeaders["X-Apple-ID-Session-Id"] = loginResponse.headers.get(
         "X-Apple-ID-Session-Id",
       );
       loginHeaders.scnt = loginResponse.headers.get("scnt");
-      console.log("Attempting to handle 2-step verification");
-      const codeRequestResponse = await fetch(loginBaseUrl, {
+      const codeRequestResponse = await fetch(baseUrl, {
         headers: { ...this.getHeaders(), ...loginHeaders },
       });
 
@@ -81,9 +97,9 @@ class AnalyticsClient {
             "Too many codes requested, try again later or use last code",
           );
         } else {
-          throw new RequestError(
-            `Error requesting 2SV code: ${loginResponse.status} ${loginResponse.statusText}`,
-            loginResponse.status,
+          AnalyticsClient.checkResponseForError(
+            codeRequestResponse,
+            "Error requesting 2SV code",
           );
         }
       }
@@ -100,12 +116,12 @@ class AnalyticsClient {
       });
       prompt.close();
 
-      if (code === "") {
+      if (code === "" || code === undefined) {
         throw new Error("No 2SV code given");
       }
 
       // 2SV response is used like the initial login response
-      loginResponse = await fetch(`${loginBaseUrl}/verify/phone/securitycode`, {
+      loginResponse = await fetch(`${baseUrl}/verify/phone/securitycode`, {
         method: "POST",
         body: JSON.stringify({
           mode: "sms",
@@ -125,14 +141,15 @@ class AnalyticsClient {
       } else {
         message = "Unrecognized error";
       }
-      throw new RequestError(
-        `Could not log in: ${loginResponse.status} ${loginResponse.statusText} ${message}`,
-        loginResponse.status,
+      AnalyticsClient.checkResponseForError(
+        loginResponse,
+        "Could not log in",
+        message,
       );
     }
 
     // Get account info cookie
-    this.extractCookie(loginResponse, "myacinfo");
+    this.setCookie(loginResponse, "myacinfo");
 
     // Request session cookie
     const sessionResponse = await fetch(
@@ -142,13 +159,43 @@ class AnalyticsClient {
       },
     );
 
-    if (!sessionResponse.ok) {
-      throw new RequestError(
-        `Could not get session cookie: ${loginResponse.status} ${loginResponse.statusText}`,
-        sessionResponse.status,
+    AnalyticsClient.checkResponseForError(
+      sessionResponse,
+      "Could not get session cookie",
+    );
+
+    this.setCookie(sessionResponse, "itctx");
+  }
+
+  /**
+   * Throw an error if client has not been authenticated
+   */
+  isAuthenticated(name) {
+    if (!this.cookies.myacinfo || !this.cookies.itctx) {
+      throw new Error(
+        `${name} function requires authentication; use login function first`,
       );
     }
-    this.extractCookie(sessionResponse, "itctx");
+  }
+
+  /**
+   * Retrieve API metadata (e.g. data date range, available metrics)
+   */
+  async getMetadata() {
+    this.isAuthenticated("getMetadata");
+    const settingsUrl =
+      "https://analytics.itunes.apple.com/analytics/api/v1/settings/all";
+
+    const settingsResponse = await fetch(settingsUrl, {
+      headers: this.getHeaders(),
+    });
+
+    AnalyticsClient.checkResponseForError(
+      settingsResponse,
+      "Could not get API settings",
+    );
+
+    return settingsResponse.json();
   }
 }
 
@@ -158,6 +205,14 @@ client
   .login(process.argv[2], process.argv[3])
   .then(() => {
     console.log("fsddfs");
+    client
+      .getMetadata()
+      .then((data) => {
+        console.log(data);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
   })
   .catch((err) => {
     console.error(`Login failed: ${err}`);
