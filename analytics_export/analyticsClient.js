@@ -2,13 +2,12 @@
 
 const fetch = require("node-fetch");
 const readline = require("readline");
-const url = require("url");
 
 const { RequestError } = require("./requestError");
 
 class AnalyticsClient {
   constructor() {
-    this.apiBaseUrl = "https://appstoreconnect.apple.com/olympus/v1";
+    this.apiBaseUrl = "https://appstoreconnect.apple.com/analytics/api/v1";
     this.headers = {
       "Content-Type": "application/json",
       Accept: "application/json, text/javascript, */*",
@@ -49,9 +48,11 @@ class AnalyticsClient {
    * if there is an error
    */
   static checkResponseForError(response, startMessage, endMessage) {
-    if (!response) {
+    if (!response.ok) {
       throw new RequestError(
-        `${startMessage}: ${response.status} ${response.statusText} ${endMessage}`,
+        `${startMessage}: ${response.status} ${response.statusText} ${
+          endMessage || ""
+        }`,
         response.status,
       );
     }
@@ -61,7 +62,8 @@ class AnalyticsClient {
    * Retrieve account and session cookies using username and password
    */
   async login(username, password) {
-    const baseUrl = "https://idmsa.apple.com/appleauth/auth";
+    const baseAuthUrl = "https://idmsa.apple.com/appleauth/auth";
+    const sessionUrl = "https://appstoreconnect.apple.com/olympus/v1/session";
     const loginHeaders = {
       "X-Apple-Widget-Key":
         "e0b80c3bf78523bfe80974d320935bfa30add02e1bff88ec2166c6bd5a706c42",
@@ -69,7 +71,7 @@ class AnalyticsClient {
 
     // Initial login request
     let loginResponse = await fetch(
-      `${baseUrl}/signin?isRememberMeEnabled=true`,
+      `${baseAuthUrl}/signin?isRememberMeEnabled=true`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -87,7 +89,7 @@ class AnalyticsClient {
         "X-Apple-ID-Session-Id",
       );
       loginHeaders.scnt = loginResponse.headers.get("scnt");
-      const codeRequestResponse = await fetch(baseUrl, {
+      const codeRequestResponse = await fetch(baseAuthUrl, {
         headers: { ...this.getHeaders(), ...loginHeaders },
       });
 
@@ -121,7 +123,7 @@ class AnalyticsClient {
       }
 
       // 2SV response is used like the initial login response
-      loginResponse = await fetch(`${baseUrl}/verify/phone/securitycode`, {
+      loginResponse = await fetch(`${baseAuthUrl}/verify/phone/securitycode`, {
         method: "POST",
         body: JSON.stringify({
           mode: "sms",
@@ -152,12 +154,9 @@ class AnalyticsClient {
     this.setCookie(loginResponse, "myacinfo");
 
     // Request session cookie
-    const sessionResponse = await fetch(
-      url.parse(`${this.apiBaseUrl}/session`),
-      {
-        headers: this.getHeaders(),
-      },
-    );
+    const sessionResponse = await fetch(sessionUrl, {
+      headers: this.getHeaders(),
+    });
 
     AnalyticsClient.checkResponseForError(
       sessionResponse,
@@ -183,19 +182,64 @@ class AnalyticsClient {
    */
   async getMetadata() {
     this.isAuthenticated("getMetadata");
-    const settingsUrl =
-      "https://analytics.itunes.apple.com/analytics/api/v1/settings/all";
 
-    const settingsResponse = await fetch(settingsUrl, {
+    const settingsResponse = await fetch(`${this.apiBaseUrl}/settings/all`, {
       headers: this.getHeaders(),
     });
 
+    const data = await settingsResponse.json();
     AnalyticsClient.checkResponseForError(
       settingsResponse,
       "Could not get API settings",
+      data.errors,
     );
 
-    return settingsResponse.json();
+    return data;
+  }
+
+  /**
+   * Get data for given metric grouped by given dimension over the date range.
+   * If dimension is null or undefined then total is returned
+   * startDate and endDate must be in ISO8601 date format YYYY-mm-dd
+   */
+  async getMetric(appId, metric, dimension, startDate, endDate) {
+    this.isAuthenticated("getMetrics");
+
+    const requestBody = {
+      adamId: [appId],
+      measures: [metric],
+      group: dimension
+        ? {
+            dimension,
+            metric,
+            limit: 10,
+            rank: "DESCENDING",
+          }
+        : null,
+      frequency: "day",
+      startTime: `${startDate}T00:00:00Z`,
+      endTime: `${endDate}T00:00:00Z`,
+    };
+
+    const metricsResponse = await fetch(
+      "https://appstoreconnect.apple.com/analytics/api/v1/data/time-series",
+      {
+        method: "POST",
+        body: JSON.stringify(requestBody),
+        headers: {
+          ...this.getHeaders(),
+          "X-Requested-By": "dev.apple.com",
+        },
+      },
+    );
+
+    const data = await metricsResponse.json();
+    AnalyticsClient.checkResponseForError(
+      metricsResponse,
+      "Could not get metrics",
+      `\n${JSON.stringify(data.errors, null, 2) || ""}`,
+    );
+    return data;
   }
 }
 
@@ -206,7 +250,13 @@ client
   .then(() => {
     console.log("fsddfs");
     client
-      .getMetadata()
+      .getMetric(
+        "989804926",
+        "pageViewCount",
+        "platformVersion",
+        "2021-01-28",
+        "2021-01-29",
+      )
       .then((data) => {
         console.log(data);
       })
