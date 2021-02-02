@@ -15,15 +15,15 @@ const { assert } = chai;
 
 describe("Analytics export", () => {
   describe("getAllowedDimensionsPerMeasure", () => {
-    let mockItcClient;
+    let mockClient;
     let analyticsExport;
 
     beforeEach(() => {
-      mockItcClient = {
-        getSettings: () => {},
+      mockClient = {
+        getMetadata: () => {},
       };
       analyticsExport = new AnalyticsExport(
-        mockItcClient,
+        mockClient,
         "project",
         "dataset",
         "123",
@@ -32,13 +32,13 @@ describe("Analytics export", () => {
     });
 
     it("should fail if given date with no data", async () => {
-      stub(mockItcClient, "getSettings").callsArgWith(0, null, {
+      stub(mockClient, "getMetadata").returns({
         configuration: {
           dataStartDate: "2020-01-02T00:00:00",
           dataEndDate: "2020-01-03T00:00:00",
         },
       });
-      analyticsExport.client = mockItcClient;
+      analyticsExport.client = mockClient;
 
       analyticsExport.getAllowedDimensionsPerMeasure = spy(
         analyticsExport,
@@ -74,13 +74,13 @@ describe("Analytics export", () => {
     });
 
     it("should fail if data includes incomplete data for a day", async () => {
-      stub(mockItcClient, "getSettings").callsArgWith(0, null, {
+      stub(mockClient, "getMetadata").returns({
         configuration: {
           dataStartDate: "2020-01-02T00:00:00",
           dataEndDate: "2020-01-03T00:00:00",
         },
       });
-      analyticsExport.client = mockItcClient;
+      analyticsExport.client = mockClient;
 
       analyticsExport.getAllowedDimensionsPerMeasure = spy(
         analyticsExport,
@@ -98,7 +98,7 @@ describe("Analytics export", () => {
     });
 
     it("should allow incomplete data if argument is given", async () => {
-      stub(mockItcClient, "getSettings").callsArgWith(0, null, {
+      stub(mockClient, "getMetadata").returns({
         configuration: {
           dataStartDate: "2020-01-02T00:00:00",
           dataEndDate: "2020-01-03T00:00:00",
@@ -106,7 +106,7 @@ describe("Analytics export", () => {
         dimensions: [],
         measures: [],
       });
-      analyticsExport.client = mockItcClient;
+      analyticsExport.client = mockClient;
 
       analyticsExport.getAllowedDimensionsPerMeasure = spy(
         analyticsExport,
@@ -121,7 +121,7 @@ describe("Analytics export", () => {
     });
 
     it("should correctly group metrics with allowed dimensions", async () => {
-      stub(mockItcClient, "getSettings").callsArgWith(0, null, {
+      stub(mockClient, "getMetadata").returns({
         configuration: {
           dataStartDate: "2019-01-01T00:00:00",
           dataEndDate: "2021-01-01T00:00:00",
@@ -158,7 +158,7 @@ describe("Analytics export", () => {
           },
         ],
       });
-      analyticsExport.client = mockItcClient;
+      analyticsExport.client = mockClient;
 
       const measuresByDimension = await analyticsExport.getAllowedDimensionsPerMeasure(
         Date.parse("2020-01-30"),
