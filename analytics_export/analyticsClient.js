@@ -207,7 +207,7 @@ class AnalyticsClient {
 
     const requestBody = {
       adamId: [appId],
-      measures: [metric],
+      measures: metric instanceof Array ? metric : [metric],
       group: dimension
         ? {
             dimension,
@@ -243,27 +243,4 @@ class AnalyticsClient {
   }
 }
 
-// TODO: Remove testing
-const client = new AnalyticsClient();
-client
-  .login(process.argv[2], process.argv[3])
-  .then(() => {
-    console.log("fsddfs");
-    client
-      .getMetric(
-        "989804926",
-        "pageViewCount",
-        "platformVersion",
-        "2021-01-28",
-        "2021-01-29",
-      )
-      .then((data) => {
-        console.log(data);
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  })
-  .catch((err) => {
-    console.error(`Login failed: ${err}`);
-  });
+exports.AnalyticsClient = AnalyticsClient;
