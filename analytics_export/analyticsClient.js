@@ -8,7 +8,7 @@ const { RequestError } = require("./requestError");
 class AnalyticsClient {
   constructor() {
     this.apiBaseUrl = "https://appstoreconnect.apple.com/analytics/api/v1";
-    this.headers = {
+    this.defaultHeaders = {
       "Content-Type": "application/json",
       Accept: "application/json, text/javascript, */*",
     };
@@ -36,11 +36,11 @@ class AnalyticsClient {
   /**
    * Return default headers with cookie header set
    */
-  getHeaders() {
+  get headers() {
     const cookies = Object.entries(this.cookies)
-      .map(([k, v]) => `${k}=${v};`)
+      .map(([k, v]) => `${k}=${v}`)
       .join(" ");
-    return { ...this.headers, Cookie: cookies };
+    return { ...this.defaultHeaders, Cookie: cookies };
   }
 
   /**
@@ -79,7 +79,7 @@ class AnalyticsClient {
           password,
           rememberMe: false,
         }),
-        headers: { ...this.getHeaders(), ...loginHeaders },
+        headers: { ...this.headers, ...loginHeaders },
       },
     );
 
@@ -90,7 +90,7 @@ class AnalyticsClient {
       );
       loginHeaders.scnt = loginResponse.headers.get("scnt");
       const codeRequestResponse = await fetch(baseAuthUrl, {
-        headers: { ...this.getHeaders(), ...loginHeaders },
+        headers: { ...this.headers, ...loginHeaders },
       });
 
       if (!codeRequestResponse.ok) {
@@ -132,7 +132,7 @@ class AnalyticsClient {
             code,
           },
         }),
-        headers: { ...this.getHeaders(), ...loginHeaders },
+        headers: { ...this.headers, ...loginHeaders },
       });
     }
 
@@ -155,7 +155,7 @@ class AnalyticsClient {
 
     // Request session cookie
     const sessionResponse = await fetch(sessionUrl, {
-      headers: this.getHeaders(),
+      headers: this.headers,
     });
 
     AnalyticsClient.checkResponseForError(
@@ -184,7 +184,7 @@ class AnalyticsClient {
     this.isAuthenticated("getMetadata");
 
     const settingsResponse = await fetch(`${this.apiBaseUrl}/settings/all`, {
-      headers: this.getHeaders(),
+      headers: this.headers,
     });
 
     const data = await settingsResponse.json();
@@ -227,7 +227,7 @@ class AnalyticsClient {
         method: "POST",
         body: JSON.stringify(requestBody),
         headers: {
-          ...this.getHeaders(),
+          ...this.headers,
           "X-Requested-By": "dev.apple.com",
         },
       },
@@ -244,3 +244,28 @@ class AnalyticsClient {
 }
 
 exports.AnalyticsClient = AnalyticsClient;
+
+// TODO: Remove testing
+const client = new AnalyticsClient();
+client
+  .login(process.argv[2], process.argv[3])
+  .then(() => {
+    console.log("fsddfs");
+    client
+      .getMetric(
+        "989804926",
+        "pageViewCount",
+        "platformVersion",
+        "2021-01-28",
+        "2021-01-29",
+      )
+      .then((data) => {
+        console.log(data);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  })
+  .catch((err) => {
+    console.error(`Login failed: ${err}`);
+  });

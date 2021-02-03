@@ -5,207 +5,140 @@ const { assert } = require("chai");
 const { beforeEach, describe, it } = require("mocha");
 const { stub } = require("sinon");
 
-const { BigqueryClient } = require("../analytics_export/bigqueryClient");
+const { AnalyticsClient } = require("../analytics_export/analyticsClient");
+const { RequestError } = require("../analytics_export/requestError");
 
-describe("BigqueryClient", () => {
-  describe("factory", () => {
-    const mockBigqueryClient = (mockDataset) =>
-      proxyquire("../analytics_export/bigqueryClient.js", {
-        "@google-cloud/bigquery": {
-          BigQuery: stub().callsFake(() => ({
-            dataset: stub().returns(mockDataset),
-          })),
-        },
-      });
+describe("AnalyticsClient", () => {
+  let testClient;
 
-    it("should create the dataset if it does not exist", async () => {
-      const mockDataset = {
-        exists: stub().returns([false]),
-        create: stub(),
-      };
+  beforeEach(() => {
+    testClient = new AnalyticsClient();
+  });
 
-      const bigqueryClient = mockBigqueryClient(mockDataset);
-
-      await bigqueryClient.BigqueryClient.createClient(
-        "fake-project",
-        "test_app_store",
+  describe("authentication check", () => {
+    it("should succeed account and session cookies are both set", () => {
+      testClient.cookies.itctx = "it";
+      testClient.cookies.myacinfo = "ac";
+      assert.doesNotThrow(
+        () => testClient.isAuthenticated("test"),
       );
-
-      assert.isTrue(mockDataset.exists.calledOnce);
-      assert.isTrue(mockDataset.create.calledOnce);
     });
 
-    it("should skip dataset creation if dataset exists", async () => {
-      const mockDataset = {
-        exists: stub().returns([true]),
-        create: stub(),
-      };
-
-      const bigqueryClient = mockBigqueryClient(mockDataset);
-
-      await bigqueryClient.BigqueryClient.createClient(
-        "fake-project",
-        "test_app_store",
+    it("should fail if both account and session cookies are not set", () => {
+      assert.throws(
+        () => testClient.isAuthenticated("test"),
+        "test function requires authentication"
       );
+    });
 
-      assert.isTrue(mockDataset.exists.calledOnce);
-      assert.isTrue(mockDataset.create.notCalled);
+    it("should fail if account cookie is not set", () => {
+      testClient.cookies.itctx = "it";
+      assert.throws(
+        () => testClient.isAuthenticated("test"),
+        "test function requires authentication",
+      );
+    });
+
+    it("should fail if session cookies is not set", () => {
+      testClient.cookies.myacinfo = "ac";
+      assert.throws(
+        () => testClient.isAuthenticated("test"),
+        "test function requires authentication"
+      );
+    });
+
+    it("should fail if a cookie was set to null", () => {
+      testClient.cookies.itctx = null;
+      assert.throws(
+        () => testClient.isAuthenticated("test"),
+        "test function requires authentication"
+      );
     });
   });
 
-  describe("create table", () => {
-    const tableName = "impressions_by_app_version";
-
-    it("should create table if it does not exist", async () => {
-      const mockTable = {
-        exists: stub().returns([false]),
-      };
-      const mockDataset = {
-        table: stub().returns(mockTable),
-        createTable: stub().returns([tableName]),
-      };
-      const bigqueryClient = new BigqueryClient(mockDataset);
-
-      await bigqueryClient.createTableIfNotExists(
-        "impressionsTotal",
-        "appVersion",
+  describe("response error check", () => {
+    it("should throw if response has failure", () => {
+      const response = {ok: false};
+      assert.throws(
+        () => AnalyticsClient.checkResponseForError(response),
+        RequestError,
       );
-
-      assert.isTrue(mockTable.exists.calledOnce);
-      assert.isTrue(mockDataset.table.calledOnce);
-      assert.isTrue(mockDataset.createTable.calledOnce);
-      assert.isTrue(mockDataset.createTable.calledWith(tableName));
     });
 
-    it("should skip table creation if table exists", async () => {
-      const mockTable = {
-        exists: stub().returns([true]),
-      };
-      const mockDataset = {
-        table: stub().returns(mockTable),
-        createTable: stub().returns([tableName]),
-      };
-
-      const bigqueryClient = new BigqueryClient(mockDataset);
-
-      await bigqueryClient.createTableIfNotExists(
-        "impressionsTotal",
-        "appVersion",
+    it("should succeed if response succeeded", () => {
+      const response = {ok: true};
+      assert.doesNotThrow(
+        () => AnalyticsClient.checkResponseForError(response),
       );
+    });
 
-      assert.isTrue(mockTable.exists.calledOnce);
-      assert.isTrue(mockDataset.table.calledOnce);
-      assert.isTrue(mockDataset.createTable.notCalled);
+    it("should throw if response is null", () => {
+      assert.throws(
+        () => AnalyticsClient.checkResponseForError(null),
+        TypeError,
+      );
     });
   });
 
-  describe("write data", () => {
-    let mockBigqueryClient;
-    let mockTable;
-    let mockDataset;
-    let mockFs;
+  describe("set cookies", () => {
+    it("should set a cookie from the set-cookie header", () => {
+      testClient.setCookie({headers: new Map([["set-cookie", "test=123;"]])}, "test");
+      assert.equal(testClient.cookies.test, "123;");
+    });
 
-    beforeEach(() => {
-      mockTable = {
-        exists: stub().returns([true]),
-        load: stub(),
-        query: stub(),
+    it("should throw an error if the requested cookie is not found", () => {
+      assert.throws(
+        () => testClient.setCookie({headers: new Map([["set-cookie", "test=123;"]])}, "test2"),
+        "Could not get test2 cookie",
+      )
+    });
+  });
+
+  describe("get headers", () => {
+    it("should return default headers plus cookies", () => {
+      testClient.defaultHeaders = {
+        testHeader: "1",
       };
-      mockDataset = {
-        table: stub().returns(mockTable),
+      testClient.cookies = {
+        testCookie: "2;",
+      };
+      const actual = testClient.headers;
+      const expected = {
+        testHeader: "1",
+        Cookie: "testCookie=2;",
       };
 
-      mockFs = {
-        writeFileSync: stub(),
-      };
+      for (const [key, value] of Object.entries(actual)) {
+        assert.equal(value, expected[key]);
+      }
+    });
+  });
 
-      mockBigqueryClient = proxyquire("../analytics_export/bigqueryClient.js", {
-        fs: mockFs,
-        tempy: {
-          file: () => "file.csv",
-        },
+  describe("login", () => {
+    // fetch calls will return data arguments in the given order
+    const mockFetch = (...data) => {
+      const fetchStub = stub();
+      for (let i = 0 ; i < data.length ; i += 1) {
+        fetchStub.onCall(i).returns(data[i]);
+      }
+
+      return proxyquire("../analytics_export/analyticsClient.js", {
+        "node-fetch": fetchStub
       });
-    });
+    };
 
-    it("should give the correct table name based on measure and dimension", async () => {
-      const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
+    it("should get account and session cookies on regular login", async () => {
+      const MockAnalyticsClient = mockFetch(
+        {ok: true, headers: new Map([["set-cookie", "myacinfo=acc;"]])},
+              {ok: true, headers: new Map([["set-cookie", "itctx=sess;"]])},
+        ).AnalyticsClient;
 
-      const tableName = await bqClient.writeData(
-        "appName",
-        "impressionsTotal",
-        "region",
-        "2020-07-01",
-        [],
-        true,
-      );
+      testClient = new MockAnalyticsClient();
 
-      assert.strictEqual(tableName, "impressions_by_region");
-    });
+      await testClient.login("username", "password");
 
-    it("should give the correct table name for null dimensions", async () => {
-      const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
-
-      const tableName = await bqClient.writeData(
-        "appName",
-        "impressionsTotal",
-        null,
-        "2020-07-01",
-        [],
-        true,
-      );
-
-      assert.strictEqual(tableName, "impressions_total");
-    });
-
-    it("should write the correct data to a temporary file", async () => {
-      const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
-
-      const data = [
-        {
-          date: "2020-07-07",
-          app_name: "Firefox",
-          impressions: 1,
-          region: "a",
-        },
-        {
-          date: "2020-07-07",
-          app_name: "Firefox",
-          impressions: 2,
-          region: "a",
-        },
-      ];
-
-      await bqClient.writeData(
-        "appName",
-        "impressionsTotal",
-        "region",
-        "2020-07-01",
-        data,
-        true,
-      );
-
-      const writtenData =
-        "2020-07-07\tFirefox\t1\ta\n2020-07-07\tFirefox\t2\ta";
-      assert.isTrue(mockFs.writeFileSync.calledWith("file.csv", writtenData));
-    });
-
-    it("should write to a partition of the table", async () => {
-      const bqClient = new mockBigqueryClient.BigqueryClient(mockDataset);
-      bqClient.createTableIfNotExists = stub();
-
-      const tableName = await bqClient.writeData(
-        "appName",
-        "impressionsTotal",
-        "region",
-        "2020-07-01",
-        [],
-        true,
-      );
-
-      assert.isTrue(mockDataset.table.calledOnce);
-      assert.isTrue(
-        mockDataset.table.calledOnceWithExactly(`${tableName}$20200701`),
-      );
+      assert.equal(testClient.cookies.myacinfo, "acc;");
+      assert.equal(testClient.cookies.itctx, "sess;");
     });
   });
 });
