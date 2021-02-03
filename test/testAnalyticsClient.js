@@ -19,15 +19,13 @@ describe("AnalyticsClient", () => {
     it("should succeed account and session cookies are both set", () => {
       testClient.cookies.itctx = "it";
       testClient.cookies.myacinfo = "ac";
-      assert.doesNotThrow(
-        () => testClient.isAuthenticated("test"),
-      );
+      assert.doesNotThrow(() => testClient.isAuthenticated("test"));
     });
 
     it("should fail if both account and session cookies are not set", () => {
       assert.throws(
         () => testClient.isAuthenticated("test"),
-        "test function requires authentication"
+        "test function requires authentication",
       );
     });
 
@@ -43,7 +41,7 @@ describe("AnalyticsClient", () => {
       testClient.cookies.myacinfo = "ac";
       assert.throws(
         () => testClient.isAuthenticated("test"),
-        "test function requires authentication"
+        "test function requires authentication",
       );
     });
 
@@ -51,14 +49,14 @@ describe("AnalyticsClient", () => {
       testClient.cookies.itctx = null;
       assert.throws(
         () => testClient.isAuthenticated("test"),
-        "test function requires authentication"
+        "test function requires authentication",
       );
     });
   });
 
   describe("response error check", () => {
     it("should throw if response has failure", () => {
-      const response = {ok: false};
+      const response = { ok: false };
       assert.throws(
         () => AnalyticsClient.checkResponseForError(response),
         RequestError,
@@ -66,9 +64,9 @@ describe("AnalyticsClient", () => {
     });
 
     it("should succeed if response succeeded", () => {
-      const response = {ok: true};
-      assert.doesNotThrow(
-        () => AnalyticsClient.checkResponseForError(response),
+      const response = { ok: true };
+      assert.doesNotThrow(() =>
+        AnalyticsClient.checkResponseForError(response),
       );
     });
 
@@ -81,16 +79,20 @@ describe("AnalyticsClient", () => {
   });
 
   describe("set cookies", () => {
-    it("should set a cookie from the set-cookie header", () => {
-      testClient.setCookie({headers: new Map([["set-cookie", "test=123;"]])}, "test");
-      assert.equal(testClient.cookies.test, "123;");
+    it("should set all cookies in the set-cookie header", () => {
+      testClient.setCookies({
+        headers: new Map([["set-cookie", "abc=123; def=456;"]]),
+      });
+      assert.equal(testClient.cookies.abc, "123;");
+      assert.equal(testClient.cookies.def, "456;");
     });
 
-    it("should throw an error if the requested cookie is not found", () => {
-      assert.throws(
-        () => testClient.setCookie({headers: new Map([["set-cookie", "test=123;"]])}, "test2"),
-        "Could not get test2 cookie",
-      )
+    it("should update existing cookies", () => {
+      testClient.cookies.abc = "123;";
+      testClient.setCookies({
+        headers: new Map([["set-cookie", "abc=456;"]]),
+      });
+      assert.equal(testClient.cookies.abc, "456;");
     });
   });
 
@@ -118,20 +120,20 @@ describe("AnalyticsClient", () => {
     // fetch calls will return data arguments in the given order
     const mockFetch = (...data) => {
       const fetchStub = stub();
-      for (let i = 0 ; i < data.length ; i += 1) {
+      for (let i = 0; i < data.length; i += 1) {
         fetchStub.onCall(i).returns(data[i]);
       }
 
       return proxyquire("../analytics_export/analyticsClient.js", {
-        "node-fetch": fetchStub
+        "node-fetch": fetchStub,
       });
     };
 
     it("should get account and session cookies on regular login", async () => {
       const MockAnalyticsClient = mockFetch(
-        {ok: true, headers: new Map([["set-cookie", "myacinfo=acc;"]])},
-              {ok: true, headers: new Map([["set-cookie", "itctx=sess;"]])},
-        ).AnalyticsClient;
+        { ok: true, headers: new Map([["set-cookie", "myacinfo=acc;"]]) },
+        { ok: true, headers: new Map([["set-cookie", "itctx=sess;"]]) },
+      ).AnalyticsClient;
 
       testClient = new MockAnalyticsClient();
 

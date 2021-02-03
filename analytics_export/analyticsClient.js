@@ -16,21 +16,17 @@ class AnalyticsClient {
   }
 
   /**
-   * Extract given cookie key from the set-cookie header of the given response and
-   * update class instance's cookies
+   * Update stored cookies based on a response's set-cookie header
    */
-  setCookie(response, key) {
-    try {
-      const sessionInfo = new RegExp(`${key}=.+?;`)
-        .exec(response.headers.get("set-cookie"))[0]
-        .split("=");
-      if (sessionInfo.length !== 2) {
-        throw new TypeError();
-      }
-      [, this.cookies[sessionInfo[0]]] = sessionInfo;
-    } catch (TypeError) {
-      throw new Error(`Could not get ${key} cookie`);
-    }
+  setCookies(response) {
+    const regexMatches = [
+      ...response.headers.get("set-cookie").matchAll(/\S+?=.+?;/g),
+    ];
+    regexMatches
+      .map((m) => m[0].split("="))
+      .forEach(([key, value]) => {
+        this.cookies[key] = value;
+      });
   }
 
   /**
@@ -151,7 +147,10 @@ class AnalyticsClient {
     }
 
     // Get account info cookie
-    this.setCookie(loginResponse, "myacinfo");
+    this.setCookies(loginResponse);
+    if (this.cookies.myacinfo === undefined) {
+      throw Error("Could not find account info cookie");
+    }
 
     // Request session cookie
     const sessionResponse = await fetch(sessionUrl, {
@@ -163,7 +162,10 @@ class AnalyticsClient {
       "Could not get session cookie",
     );
 
-    this.setCookie(sessionResponse, "itctx");
+    this.setCookies(sessionResponse);
+    if (this.cookies.itctx === undefined) {
+      throw Error("Could not find session cookie");
+    }
   }
 
   /**
@@ -244,28 +246,3 @@ class AnalyticsClient {
 }
 
 exports.AnalyticsClient = AnalyticsClient;
-
-// TODO: Remove testing
-const client = new AnalyticsClient();
-client
-  .login(process.argv[2], process.argv[3])
-  .then(() => {
-    console.log("fsddfs");
-    client
-      .getMetric(
-        "989804926",
-        "pageViewCount",
-        "platformVersion",
-        "2021-01-28",
-        "2021-01-29",
-      )
-      .then((data) => {
-        console.log(data);
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  })
-  .catch((err) => {
-    console.error(`Login failed: ${err}`);
-  });
