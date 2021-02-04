@@ -57,7 +57,7 @@ class AnalyticsClient {
   /**
    * Retrieve account and session cookies using username and password
    */
-  async login(username, password) {
+  async login(username, password, testCode) {
     const baseAuthUrl = "https://idmsa.apple.com/appleauth/auth";
     const sessionUrl = "https://appstoreconnect.apple.com/olympus/v1/session";
     const loginHeaders = {
@@ -104,19 +104,23 @@ class AnalyticsClient {
           }
         }
 
-        const prompt = readline.createInterface({
-          input: process.stdin,
-          output: process.stdout,
-        });
-
-        const code = await new Promise((resolve) => {
-          prompt.question("Enter 2SV code: ", (input) => {
-            resolve(input);
+        let code;
+        if (testCode) {
+          code = testCode;
+        } else {
+          const prompt = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
           });
-        });
-        prompt.close();
 
-        if (code === "" || code === undefined) {
+          code = await new Promise((resolve) => {
+            prompt.question("Enter 2SV code: ", (input) => {
+              resolve(input);
+            });
+          });
+          prompt.close();
+        }
+        if (!code) {
           throw new Error("No 2SV code given");
         }
 
@@ -141,6 +145,8 @@ class AnalyticsClient {
           "X-Apple-ID-Session-Id",
         );
         loginHeaders.scnt = loginResponse.headers.get("scnt");
+
+        // 2SV response is used like the initial login response
         loginResponse = await fetch(`${baseAuthUrl}/repair/complete`, {
           method: "POST",
           headers: { ...this.headers, ...loginHeaders },
@@ -265,28 +271,3 @@ class AnalyticsClient {
 }
 
 exports.AnalyticsClient = AnalyticsClient;
-
-// TODO: Remove testing
-const client = new AnalyticsClient();
-client
-  .login(process.argv[2], process.argv[3])
-  .then(() => {
-    console.log("fsddfs");
-    client
-      .getMetric(
-        "989804926",
-        "pageViewCount",
-        "platformVersion",
-        "2021-01-28",
-        "2021-01-29",
-      )
-      .then((data) => {
-        console.log(data);
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  })
-  .catch((err) => {
-    console.error(`Login failed: ${err}`);
-  });

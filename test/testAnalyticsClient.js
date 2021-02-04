@@ -131,13 +131,44 @@ describe("AnalyticsClient", () => {
 
     it("should get account and session cookies on regular login", async () => {
       const MockAnalyticsClient = mockFetch(
-        { ok: true, headers: new Map([["set-cookie", "myacinfo=acc;"]]) },
-        { ok: true, headers: new Map([["set-cookie", "itctx=sess;"]]) },
+        { ok: true, headers: new Map([["set-cookie", "myacinfo=acc;"]]) }, // login
+        { ok: true, headers: new Map([["set-cookie", "itctx=sess;"]]) }, // get session
       ).AnalyticsClient;
 
       testClient = new MockAnalyticsClient();
 
       await testClient.login("username", "password");
+
+      assert.equal(testClient.cookies.myacinfo, "acc;");
+      assert.equal(testClient.cookies.itctx, "sess;");
+    });
+
+    it("should get account and session cookies on 2SV bypass", async () => {
+      const MockAnalyticsClient = mockFetch(
+        { ok: false, status: 412, headers: new Map() }, // login
+        { ok: true, headers: new Map([["set-cookie", "myacinfo=acc;"]]) }, // bypass 2sv
+        { ok: true, headers: new Map([["set-cookie", "itctx=sess;"]]) }, // session
+      ).AnalyticsClient;
+
+      testClient = new MockAnalyticsClient();
+
+      await testClient.login("username", "password");
+
+      assert.equal(testClient.cookies.myacinfo, "acc;");
+      assert.equal(testClient.cookies.itctx, "sess;");
+    });
+
+    it("should get account and session cookies on 2SV request", async () => {
+      const MockAnalyticsClient = mockFetch(
+        { ok: false, status: 409, headers: new Map() }, // login
+        { ok: true, headers: new Map() }, // request 2sv code
+        { ok: true, headers: new Map([["set-cookie", "myacinfo=acc;"]]) }, // send code
+        { ok: true, headers: new Map([["set-cookie", "itctx=sess;"]]) }, // session
+      ).AnalyticsClient;
+
+      testClient = new MockAnalyticsClient();
+
+      await testClient.login("username", "password", "123456");
 
       assert.equal(testClient.cookies.myacinfo, "acc;");
       assert.equal(testClient.cookies.itctx, "sess;");
