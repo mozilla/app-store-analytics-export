@@ -1,7 +1,7 @@
 FROM node:12-slim
 MAINTAINER Ben Wu <bewu@mozilla.com>
 
-# https://github.com/mozilla-services/Dockerflow/blob/master/docs/building-container.md
+# https://github.com/mozilla-services/Dockerflow/blob/main/docs/building-container.md
 ARG USER_ID="10001"
 ARG GROUP_ID="app"
 ARG HOME="/app"

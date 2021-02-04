@@ -6,8 +6,6 @@ metric and dimension combination into a single table.
 Metrics and dimensions that will be exported can be found in the 
 [metric metadata file](analytics_export/tableMetadata.js).
 
-This export uses the 
-[iTunesConnectAnalytics](https://github.com/JanHalozan/iTunesConnectAnalytics) package to handle authentication.
 A username and password for App Store Connect is required to use the script. 
 
 ### Adding Metrics To Export

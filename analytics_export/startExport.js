@@ -1,7 +1,5 @@
 "use strict";
 
-const itc = require("itunesconnectanalytics");
-
 const { argv } = require("yargs")
   .describe("username", "App store connect user to authenticate with")
   .describe("password", "Password for the given app store connect user")
@@ -32,47 +30,44 @@ const { argv } = require("yargs")
     "project",
   ]);
 
+const { AnalyticsClient } = require("./analyticsClient.js");
 const { AnalyticsExport } = require("./analyticsExport.js");
 
-function authenticate(username, password) {
-  return new Promise((resolve, reject) => {
-    const client = new itc.Itunes(username, password, {
-      errorCallback: (err) => {
-        reject(err);
-      },
-      successCallback: () => {
-        console.log("Logged in");
-        resolve(client);
-      },
-    });
-  });
+async function startExport() {
+  console.log(
+    `Exporting ${argv.appName} (${argv.appId}) for ${argv.startDate} to ${argv.endDate} into ${argv.project}.${argv.dataset}`,
+  );
+  console.time("Export");
+
+  const client = new AnalyticsClient();
+
+  await client.login(argv.username, argv.password);
+
+  const endDate = argv.endDate || argv.startDate;
+
+  const analyticsExport = new AnalyticsExport(
+    client,
+    argv.project,
+    argv.dataset,
+    argv.appId,
+    argv.appName,
+  );
+
+  await analyticsExport.startExport(
+    argv.startDate,
+    endDate,
+    argv.overwrite,
+    argv.allowIncomplete,
+  );
+
+  console.timeEnd("Export");
 }
 
-authenticate(argv.username, argv.password)
-  .then((client) => {
-    const endDate = argv.endDate || argv.startDate;
-
-    const analyticsExport = new AnalyticsExport(
-      client,
-      argv.project,
-      argv.dataset,
-      argv.appId,
-      argv.appName,
-    );
-
-    analyticsExport
-      .startExport(
-        argv.startDate,
-        endDate,
-        argv.overwrite,
-        argv.allowIncomplete,
-      )
-      .catch((err) => {
-        console.error(err);
-        process.exit(1);
-      });
+startExport()
+  .then(() => {
+    console.log("Successfully exported");
   })
   .catch((err) => {
-    console.error(`Login failed: ${err}`);
+    console.error(err);
     process.exit(1);
   });

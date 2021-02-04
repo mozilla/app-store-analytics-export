@@ -1,9 +1,5 @@
 "use strict";
 
-const fetch = require("node-fetch");
-const itc = require("itunesconnectanalytics");
-const url = require("url");
-const util = require("util");
 const { FetchError } = require("node-fetch");
 
 const { BigqueryClient } = require("./bigqueryClient");
@@ -28,10 +24,7 @@ class AnalyticsExport {
     endTimestamp,
     allowIncomplete,
   ) {
-    const getSettings = util
-      .promisify(this.client.getSettings)
-      .bind(this.client);
-    const settings = await getSettings();
+    const settings = await this.client.getMetadata();
 
     const dataEndDate = settings.configuration.dataEndDate.slice(0, 10);
     const dataStartDate = settings.configuration.dataStartDate.slice(0, 10);
@@ -83,38 +76,18 @@ class AnalyticsExport {
     return measuresByDimension;
   }
 
-  async getMetric(startDate, endDate, measure, dimension) {
-    console.log(`Getting ${measure} by ${dimension}`);
+  async getMetric(startDate, endDate, metric, dimension) {
+    console.log(`Getting ${metric} by ${dimension}`);
 
     const dimensionGiven = dimension !== undefined && dimension !== null;
 
-    const measures = measure instanceof Array ? measure : [measure];
-    const queryConfig = {
-      measures,
-      frequency: itc.frequency.days,
-    };
-    if (dimensionGiven) {
-      queryConfig.group = { dimension };
-    }
-    const query = itc.AnalyticsQuery.metrics(this.appId, queryConfig).date(
+    const data = await this.client.getMetric(
+      this.appId,
+      metric,
+      dimension,
       startDate,
       endDate,
     );
-
-    // Directly fetch instead of itc.request to avoid queue and properly handle errors
-    const response = await fetch(url.parse(query.apiURL + query.endpoint), {
-      method: "POST",
-      body: JSON.stringify(query.assembleBody()),
-      headers: this.client.getHeaders(),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new RequestError(
-        `${response.status} ${response.statusText}
-        \n${JSON.stringify(data.errors, null, 2) || ""}`,
-        response.status,
-      );
-    }
 
     const resultsByDate = new Map();
 
@@ -125,7 +98,7 @@ class AnalyticsExport {
           const value = {
             date: dayData.date.slice(0, 10),
             app_name: this.appName,
-            [metricData[measure].name]: dayData[measure],
+            [metricData[metric].name]: dayData[metric],
           };
           if (dimensionGiven) {
             value[dimension] = result.group.title;
