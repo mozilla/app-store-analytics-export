@@ -79,71 +79,90 @@ class AnalyticsClient {
       },
     );
 
-    if (!loginResponse.ok && loginResponse.status === 409) {
-      console.log("Attempting to handle 2-step verification");
-      loginHeaders["X-Apple-ID-Session-Id"] = loginResponse.headers.get(
-        "X-Apple-ID-Session-Id",
-      );
-      loginHeaders.scnt = loginResponse.headers.get("scnt");
-      const codeRequestResponse = await fetch(baseAuthUrl, {
-        headers: { ...this.headers, ...loginHeaders },
-      });
-
-      if (!codeRequestResponse.ok) {
-        if (codeRequestResponse.status === 423) {
-          console.log(
-            "Too many codes requested, try again later or use last code",
-          );
-        } else {
-          AnalyticsClient.checkResponseForError(
-            codeRequestResponse,
-            "Error requesting 2SV code",
-          );
-        }
-      }
-
-      const prompt = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-
-      const code = await new Promise((resolve) => {
-        prompt.question("Enter 2SV code: ", (input) => {
-          resolve(input);
-        });
-      });
-      prompt.close();
-
-      if (code === "" || code === undefined) {
-        throw new Error("No 2SV code given");
-      }
-
-      // 2SV response is used like the initial login response
-      loginResponse = await fetch(`${baseAuthUrl}/verify/phone/securitycode`, {
-        method: "POST",
-        body: JSON.stringify({
-          mode: "sms",
-          phoneNumber: { id: 1 },
-          securityCode: {
-            code,
-          },
-        }),
-        headers: { ...this.headers, ...loginHeaders },
-      });
-    }
-
     if (!loginResponse.ok) {
-      let message;
-      if (loginResponse.status === 401) {
-        message = "Invalid username and password";
+      if (loginResponse.status === 409) {
+        // 2SV request
+        console.log("Attempting to handle 2-step verification");
+        loginHeaders["X-Apple-ID-Session-Id"] = loginResponse.headers.get(
+          "X-Apple-ID-Session-Id",
+        );
+        loginHeaders.scnt = loginResponse.headers.get("scnt");
+        const codeRequestResponse = await fetch(baseAuthUrl, {
+          headers: { ...this.headers, ...loginHeaders },
+        });
+
+        if (!codeRequestResponse.ok) {
+          if (codeRequestResponse.status === 423) {
+            console.log(
+              "Too many codes requested, try again later or use last code",
+            );
+          } else {
+            AnalyticsClient.checkResponseForError(
+              codeRequestResponse,
+              "Error requesting 2SV code",
+            );
+          }
+        }
+
+        const prompt = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const code = await new Promise((resolve) => {
+          prompt.question("Enter 2SV code: ", (input) => {
+            resolve(input);
+          });
+        });
+        prompt.close();
+
+        if (code === "" || code === undefined) {
+          throw new Error("No 2SV code given");
+        }
+
+        // 2SV response is used like the initial login response
+        loginResponse = await fetch(
+          `${baseAuthUrl}/verify/phone/securitycode`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              mode: "sms",
+              phoneNumber: { id: 1 },
+              securityCode: {
+                code,
+              },
+            }),
+            headers: { ...this.headers, ...loginHeaders },
+          },
+        );
+      } else if (loginResponse.status === 412) {
+        // Skip adding 2SV to account
+        loginHeaders["X-Apple-ID-Session-Id"] = loginResponse.headers.get(
+          "X-Apple-ID-Session-Id",
+        );
+        loginHeaders.scnt = loginResponse.headers.get("scnt");
+        loginResponse = await fetch(`${baseAuthUrl}/repair/complete`, {
+          method: "POST",
+          headers: { ...this.headers, ...loginHeaders },
+        });
+
+        AnalyticsClient.checkResponseForError(
+          loginResponse,
+          "Error skipping 2SV request",
+        );
       } else {
-        message = "Unrecognized error";
+        let message;
+        if (loginResponse.status === 401) {
+          message = "Invalid username and password";
+        } else {
+          message = "Unrecognized error";
+        }
+        AnalyticsClient.checkResponseForError(
+          loginResponse,
+          "Could not log in",
+          message,
+        );
       }
-      AnalyticsClient.checkResponseForError(
-        loginResponse,
-        "Could not log in",
-        message,
-      );
     }
 
     // Get account info cookie
@@ -246,3 +265,28 @@ class AnalyticsClient {
 }
 
 exports.AnalyticsClient = AnalyticsClient;
+
+// TODO: Remove testing
+const client = new AnalyticsClient();
+client
+  .login(process.argv[2], process.argv[3])
+  .then(() => {
+    console.log("fsddfs");
+    client
+      .getMetric(
+        "989804926",
+        "pageViewCount",
+        "platformVersion",
+        "2021-01-28",
+        "2021-01-29",
+      )
+      .then((data) => {
+        console.log(data);
+      })
+      .catch((err) => {
+        console.error(err);
+      });
+  })
+  .catch((err) => {
+    console.error(`Login failed: ${err}`);
+  });
