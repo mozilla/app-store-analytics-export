@@ -61,6 +61,7 @@ class AnalyticsClient {
     const baseAuthUrl = "https://idmsa.apple.com/appleauth/auth";
     const sessionUrl = "https://appstoreconnect.apple.com/olympus/v1/session";
     const loginHeaders = {
+      // static key that is required for all auth endpoints
       "X-Apple-Widget-Key":
         "e0b80c3bf78523bfe80974d320935bfa30add02e1bff88ec2166c6bd5a706c42",
     };
