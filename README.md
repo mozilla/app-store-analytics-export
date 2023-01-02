@@ -58,4 +58,4 @@ yarn lint-fix && yarn pretty
 Tests are run with mocha:
 ```sh
 yarn test
-```
+```test
