@@ -4,13 +4,13 @@
  */
 
 const metricData = {
-  totalDownloads: {
-    name: "total_downloads",
-    description:
-      "The number of Total Downloads.",
-    optin: true,
-    type: "INT64",
-  },
+//  totalDownloads: {
+  //  name: "total_downloads",
+   // description:
+     // "The number of Total Downloads.",
+    //optin: true,
+    //type: "INT64",
+ // },
   firstTimeDownloads: {
     name: "first_time_downloads",
     description:
